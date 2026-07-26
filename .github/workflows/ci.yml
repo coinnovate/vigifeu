@@ -1,0 +1,13 @@
+# CI squelette Lot 0 — s'enrichira des garde-fous Spec 04 §9 au fil des lots
+# (lint lexique, golden file Saumos, JSON-LD, budget perf).
+name: ci
+on: [push, pull_request]
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv python install 3.12
+      - run: uv sync --extra dev
+      - run: uv run pytest -q

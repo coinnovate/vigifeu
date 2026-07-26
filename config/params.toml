@@ -1,0 +1,45 @@
+# Vigifeu — configuration versionnée (plan de dev §1.1, Spec 02 P4)
+# Tout paramètre qui décide quelque chose vit ici, jamais en dur dans le code.
+# Le hash de ce fichier entrera dans qualification_reason (Lot 2).
+
+[general]
+db_path = "data/vigifeu.db"
+# Zone d'interrogation FIRMS : France métropolitaine + marge (ouest,sud,est,nord)
+firms_bbox = "-5.5,41.0,10.0,51.5"
+
+[firms]
+# https://firms.modaps.eosdis.nasa.gov/api/area/
+base_url = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
+timeout_s = 180          # Spec 02 §9 : timeouts généreux, FIRMS ralentit les jours de grands feux
+max_retries = 3
+retry_wait_min_s = 30    # backoff exponentiel entre 30 s et 5 min
+retry_wait_max_s = 300
+fetch_interval_min = 15  # Spec 02 §2 : fraîcheur + mesure de latence NRT
+# Budget de transactions (quota MAP_KEY ~5000/10 min, les requêtes area comptent multiple).
+# À 15 min d'intervalle, 3 satellites × 2 jours = 6 requêtes/cycle : très en dessous du quota.
+day_range = 1            # une requête = un jour (Spec 02 §9 : requêtes jour par jour)
+check_previous_day = true  # contrôle J-1 à chaque cycle (hotspots publiés tardivement)
+
+# Sources satellitaires : configurables, jamais codées en dur (cadrage §5.1).
+# Le champ `code` est l'identifiant d'API FIRMS.
+[[firms.sources]]
+code = "VIIRS_SNPP_NRT"
+platform = "Suomi-NPP"
+instrument = "VIIRS"
+resolution_m = 375
+active = true
+notes = "Durée de vie nominale dépassée, orbite en dérive — surveiller."
+
+[[firms.sources]]
+code = "VIIRS_NOAA20_NRT"
+platform = "NOAA-20"
+instrument = "VIIRS"
+resolution_m = 375
+active = true
+
+[[firms.sources]]
+code = "VIIRS_NOAA21_NRT"
+platform = "NOAA-21"
+instrument = "VIIRS"
+resolution_m = 375
+active = true

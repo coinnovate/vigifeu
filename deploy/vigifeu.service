@@ -1,0 +1,29 @@
+# /etc/systemd/system/vigifeu.service
+# Daemon d'ingestion Vigifeu — unique écrivain SQLite (plan de dev §1.1)
+#
+# Installation :
+#   sudo cp deploy/vigifeu.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now vigifeu
+# Logs : journalctl -u vigifeu -f
+
+[Unit]
+Description=Vigifeu — ingestion FIRMS
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vigifeu
+WorkingDirectory=/opt/vigifeu
+EnvironmentFile=/opt/vigifeu/.env
+ExecStart=/opt/vigifeu/.venv/bin/python -m vigifeu.scheduler
+Restart=always
+RestartSec=30
+# Durcissement minimal
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/vigifeu/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
