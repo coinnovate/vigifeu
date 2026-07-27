@@ -3,6 +3,7 @@
   vigifeu init                    — crée/migre la base, synchronise les sources
   vigifeu fetch [YYYY-MM-DD]      — ingère un jour (défaut : aujourd'hui) pour tous les satellites
   vigifeu backfill A B            — ingère l'intervalle de jours [A, B] (constitution de fixtures)
+  vigifeu backfill-gaps           — rattrape les jours à trous (runs en échec) jusqu'à J-7
   vigifeu latence                 — statistiques de latence NRT (le jalon L0)
   vigifeu runs [N]                — derniers runs d'ingestion (défaut : 20)
 """
@@ -13,7 +14,7 @@ import os
 import sys
 from datetime import UTC, date, datetime, timedelta
 
-from vigifeu.ingest.firms import ingest_day
+from vigifeu.ingest.firms import fetch_firms_backfill, ingest_day
 from vigifeu.model.db import (
     active_sources,
     connect,
@@ -53,6 +54,16 @@ def cmd_backfill(start_str: str, end_str: str) -> None:
             r = ingest_day(conn, config, src, day)
             print(f"{src['code']:>18} {day}: {r}")
         day += timedelta(days=1)
+
+
+def cmd_backfill_gaps() -> None:
+    conn, config = _open()
+    results = fetch_firms_backfill(conn, config)
+    if not results:
+        print("aucun trou à rattraper")
+        return
+    for r in results:
+        print(f"{r['source']:>18} {r['day']}: {r}")
 
 
 def cmd_latence() -> None:
@@ -99,6 +110,8 @@ def main() -> None:
             cmd_fetch(rest[0] if rest else None)
         case "backfill":
             cmd_backfill(rest[0], rest[1])
+        case "backfill-gaps":
+            cmd_backfill_gaps()
         case "latence":
             cmd_latence()
         case "runs":

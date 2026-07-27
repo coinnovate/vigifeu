@@ -179,3 +179,48 @@ def fetch_cycle(conn: sqlite3.Connection, config: dict) -> list[dict]:
             summary.update({"source": src["code"], "day": day.isoformat()})
             results.append(summary)
     return results
+
+
+def days_needing_backfill(
+    conn: sqlite3.Connection, config: dict, today: date
+) -> list[tuple[sqlite3.Row, date]]:
+    """(satellite, jour) sans run FIRMS réussi dans la fenêtre [today-N, today].
+
+    Un jour déjà ingéré avec succès n'est jamais un trou : on possède déjà sa
+    donnée, un échec ultérieur de re-fetch ne la perd pas. Un jour avec seulement
+    des runs en échec — ou jamais tenté (panne du daemon) — est un trou.
+    """
+    from vigifeu.model.db import active_sources
+
+    n = config["firms"].get("backfill_days", 7)
+    days = [today - timedelta(days=d) for d in range(n + 1)]
+    gaps: list[tuple[sqlite3.Row, date]] = []
+    for src in active_sources(conn):
+        for day in days:
+            ok = conn.execute(
+                """SELECT 1 FROM ingestion_run
+                   WHERE source=? AND status='ok'
+                     AND json_extract(params, '$.day')=? LIMIT 1""",
+                (f"firms:{src['code']}", day.isoformat()),
+            ).fetchone()
+            if not ok:
+                gaps.append((src, day))
+    return gaps
+
+
+def fetch_firms_backfill(
+    conn: sqlite3.Connection, config: dict, today: date | None = None
+) -> list[dict]:
+    """Tâche de rattrapage (Spec 02 §2, horaire) : ré-ingère les jours à trous.
+
+    Rejoue chaque (satellite, jour) sans succès dans la fenêtre. Idempotent :
+    sans trou, ne fait rien. Le trou reste visible dans ingestion_run (les runs
+    en échec ne sont pas effacés — la boîte noire garde la trace de la panne).
+    """
+    today = today or datetime.now(UTC).date()
+    results = []
+    for src, day in days_needing_backfill(conn, config, today):
+        summary = ingest_day(conn, config, src, day)
+        summary.update({"source": src["code"], "day": day.isoformat()})
+        results.append(summary)
+    return results

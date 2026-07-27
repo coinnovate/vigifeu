@@ -27,6 +27,7 @@ fetch_interval_min = 15  # Spec 02 §2 : fraîcheur + mesure de latence NRT
 # À 15 min d'intervalle, 3 satellites × 2 jours = 6 requêtes/cycle : très en dessous du quota.
 day_range = 1            # une requête = un jour (Spec 02 §9 : requêtes jour par jour)
 check_previous_day = true  # contrôle J-1 à chaque cycle (hotspots publiés tardivement)
+backfill_days = 7        # Spec 02 §2 : fetch_firms_backfill re-demande les jours à trous jusqu'à J-7
 
 # Sources satellitaires : configurables, jamais codées en dur (cadrage §5.1).
 # Le champ `code` est l'identifiant d'API FIRMS.
