@@ -27,6 +27,14 @@ t_gap_h = 48                 # 2 j sans détection ⇒ candidat perdu, nouvel é
 t_silence_h = 24             # actif → plus_detecte (2 groupes de passages VIIRS manqués)
 t_reprise_days = 7           # plus_detecte → archive ; fenêtre de reprise (§4.3)
 
+[fixed_source]
+# Spec 02 §3 (étape 3) et §5.1 (R1) — registre des sources fixes (torchères,
+# aciéries…). Un hotspot dans le rayon d'une source CONFIRMÉE est marqué et exclu
+# du clustering. La promotion suspect_source_fixe → candidat se fait après
+# n_promotion_days jours distincts (qualification.n_promotion_days), revue au CLI.
+mark_radius_m = 1000        # rayon de marquage autour d'une source confirmée
+candidate_min_radius_m = 500  # rayon plancher d'un candidat (emprise/2 sinon)
+
 [qualification]
 # Spec 02 §5.1 — règles des trois signatures, ordre d'évaluation strict. Le hash
 # de cette section entre dans qualification_reason (explicabilité, P4).
