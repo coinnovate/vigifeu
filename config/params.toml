@@ -15,6 +15,32 @@ firms_bbox = "-5.5,41.0,10.0,51.5"
 # deux passages successifs.
 window_min = 30
 
+[vigieau]
+# API publique VigiEau (restrictions d'eau, catégorie declaree — Spec 01 §3.6).
+# HYPOTHÈSE DE FORMAT (à vérifier contre l'API réelle) : GET {base_url}/zones
+# ?commune={code_insee}&profil=particulier renvoie une liste de zones portant
+# `niveauGravite` (vigilance/alerte/alerte_renforcee/crise) et un bloc `arrete`.
+base_url = "https://api.vigieau.beta.gouv.fr/api"
+profil = "particulier"
+timeout_s = 30
+max_retries = 3
+retry_wait_min_s = 5
+retry_wait_max_s = 60
+provider = "vigieau"
+
+[drought]
+# EFFIS (FWI + sous-indices, point de grille) et Météo des forêts (danger
+# départemental, value_class officielle). Catégories mesuree/estimee — Spec 01 §3.5.
+# HYPOTHÈSES DE FORMAT (à vérifier live) documentées dans ingest/drought.py.
+effis_url = "https://ies-ows.jrc.ec.europa.eu/effis/fwi"       # à confirmer
+meteo_forets_url = "https://public-api.meteofrance.fr/meteo-des-forets"  # à confirmer
+timeout_s = 30
+max_retries = 3
+retry_wait_min_s = 5
+retry_wait_max_s = 60
+provider_effis = "effis"
+provider_meteo_forets = "meteo-france"
+
 [monitoring]
 # Spec 02 §9 — le silence d'une source est une information critique en saison.
 # Mécanisme principal : dead-man switch healthchecks.io (un ping manquant EST
