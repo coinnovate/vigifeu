@@ -1,0 +1,9 @@
+# Les scripts shell doivent toujours être livrés en LF (exécution sur le VPS Linux) :
+# des fins de ligne CRLF casseraient le shebang.
+*.sh text eol=lf
+
+# Fichiers SQL de migration : LF aussi, pour un rendu de diff stable multi-plateforme.
+*.sql text eol=lf
+
+# La fixture Parquet est binaire — jamais de conversion de fins de ligne.
+*.parquet binary
