@@ -41,7 +41,7 @@ def signature_metrics(conn: sqlite3.Connection, event_id: int, config: dict) -> 
     ).fetchall()
     if not hotspots:
         return {"n_hotspots_dedup": 0, "n_passages": 0, "jours_distincts": 0,
-                "emprise_m": 0.0, "frp_median": 0.0, "extension_m": 0.0}
+                "emprise_m": 0.0, "frp_median": 0.0, "frp_max": 0.0, "extension_m": 0.0}
 
     groups = dedup.dedup_groups(hotspots, config)
     reps = dedup.representative_ids(hotspots, groups)
@@ -58,6 +58,7 @@ def signature_metrics(conn: sqlite3.Connection, event_id: int, config: dict) -> 
 
     frps = sorted(h["frp_mw"] for h in hotspots if h["id"] in reps and h["frp_mw"] is not None)
     frp_med = median(frps) if frps else 0.0
+    frp_max = max(frps) if frps else 0.0
 
     # Extension spatiale entre passages : plus grand déplacement du centroïde d'un
     # passage à l'autre (un feu fixe reste sous le bruit pixel, un feu mobile bouge).
@@ -73,7 +74,8 @@ def signature_metrics(conn: sqlite3.Connection, event_id: int, config: dict) -> 
             extension = max(extension, math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]))
 
     return {"n_hotspots_dedup": n_dedup, "n_passages": n_passages, "jours_distincts": jours,
-            "emprise_m": emprise, "frp_median": frp_med, "extension_m": extension}
+            "emprise_m": emprise, "frp_median": frp_med, "frp_max": frp_max,
+            "extension_m": extension}
 
 
 def classify(metrics: dict, config: dict) -> tuple[str, str]:
@@ -90,10 +92,14 @@ def classify(metrics: dict, config: dict) -> tuple[str, str]:
     if metrics["n_passages"] == 1 and metrics["n_hotspots_dedup"] <= 2:
         return "suspect_isole", "R2"
 
-    # R3 — feu de végétation (persistant-mobile)
-    if metrics["n_passages"] >= 2 and (
-            metrics["extension_m"] >= q["e_mobile_m"]
-            or metrics["n_hotspots_dedup"] >= q["n_franc"]):
+    # R3 — feu de végétation (persistant-mobile). La voie « mouvement » exige aussi
+    # une intensité réelle (frp_max ≥ f_mobile_mw) : sans ce plancher, un scatter
+    # nocturne diffus dont les centroïdes de passages jitterent de ~400 m serait
+    # faussement confirmé (§11.1). La voie « feu franc » (≥ n_franc pixels) reste
+    # indépendante de l'intensité.
+    mobile = metrics["extension_m"] >= q["e_mobile_m"] and metrics["frp_max"] >= q["f_mobile_mw"]
+    franc = metrics["n_hotspots_dedup"] >= q["n_franc"]
+    if metrics["n_passages"] >= 2 and (mobile or franc):
         return _CONFIRME, "R3"
 
     # R4 — par défaut, suspect_isole conservé en observation
@@ -130,6 +136,7 @@ def qualify_events(conn: sqlite3.Connection, config: dict, event_ids, *, stamp: 
             "jours_distincts": metrics["jours_distincts"],
             "emprise_m": round(metrics["emprise_m"]),
             "frp_median": round(metrics["frp_median"], 1),
+            "frp_max": round(metrics["frp_max"], 1),
             "extension_m": round(metrics["extension_m"]),
             "config": cfg_hash,
             "at": stamp,

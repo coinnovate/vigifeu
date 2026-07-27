@@ -28,7 +28,7 @@ def _qualification(conn, event_id):
 
 def _m(**kw):
     base = {"n_hotspots_dedup": 0, "n_passages": 0, "jours_distincts": 0,
-            "emprise_m": 0.0, "frp_median": 0.0, "extension_m": 0.0}
+            "emprise_m": 0.0, "frp_median": 0.0, "frp_max": 0.0, "extension_m": 0.0}
     base.update(kw)
     return base
 
@@ -47,9 +47,17 @@ def test_classify_r2_isole(db):
 
 
 def test_classify_r3_par_mouvement(db):
+    """Voie mouvement : extension ≥ E_mobile ET intensité réelle (frp_max ≥ F_mobile)."""
     _, config = db
-    m = _m(n_passages=2, extension_m=500, n_hotspots_dedup=4)
+    m = _m(n_passages=2, extension_m=500, frp_max=50, n_hotspots_dedup=4)
     assert classify(m, config) == ("vegetation_confirme", "R3")
+
+
+def test_classify_r3_mouvement_refuse_si_frp_faible(db):
+    """Mouvement apparent mais FRP faible (scatter diffus) ⇒ pas R3 (le faux positif visé)."""
+    _, config = db
+    m = _m(n_passages=3, extension_m=430, frp_max=14, n_hotspots_dedup=7, jours_distincts=1)
+    assert classify(m, config) == ("suspect_isole", "R4")
 
 
 def test_classify_r3_par_feu_franc(db):
@@ -89,10 +97,10 @@ def test_detection_isolee_r2(db):
 
 
 def test_vegetation_r3_par_mouvement(db):
-    """Deux passages, front déplacé de ~600 m ⇒ vegetation_confirme."""
+    """Deux passages, front déplacé de ~600 m, intensité franche ⇒ vegetation_confirme."""
     conn, config = db
-    insert_hotspot(conn, 44.900, -1.020, "2026-07-22T12:00:00Z", overpass_id=1)
-    insert_hotspot(conn, 44.906, -1.020, "2026-07-22T13:40:00Z", overpass_id=2)  # ~670 m N
+    insert_hotspot(conn, 44.900, -1.020, "2026-07-22T12:00:00Z", frp=60.0, overpass_id=1)
+    insert_hotspot(conn, 44.906, -1.020, "2026-07-22T13:40:00Z", frp=80.0, overpass_id=2)  # ~670 m N
     res = _qualify_all(conn, config)
     eid = next(iter(res["changed"]))
     assert _qualification(conn, eid) == "vegetation_confirme"
@@ -138,12 +146,10 @@ def test_saumos_reel_vegetation_confirme(db):
     assert _qualification(conn, saumos_id) == "vegetation_confirme"
 
 
-def test_saumos_reel_foyer_20juillet_borderline_r3(db):
-    """Le foyer du 20/07 (scatter nocturne bref, FRP faible, extension ~430 m juste
-    au-dessus d'E_mobile) est aujourd'hui classé R3 par mouvement. Conforme aux
-    règles telles que spécifiées, mais c'est le faux positif visé par le point
-    ouvert §11.1 (brûlages) : ce test documente le comportement courant — à revoir
-    lors du calage saisonnier des seuils (§5.3), pas un invariant du jalon."""
+def test_saumos_reel_foyer_20juillet_non_publie(db):
+    """Le foyer du 20/07 (scatter nocturne bref, extension ~430 m mais FRP max ~14 MW)
+    n'est PAS confirmé : le plancher F_mobile (calage, option C) filtre ce faux
+    positif §11.1 tout en gardant les vrais feux intenses. Il reste suspect_isole."""
     conn, config = db
     load_saumos_hotspots(conn, bbox=(44.5, 45.3, -1.30, -0.30))
     build_overpasses(conn, config)
@@ -155,7 +161,7 @@ def test_saumos_reel_foyer_20juillet_borderline_r3(db):
         "AND lat BETWEEN 44.78 AND 44.82 AND lon BETWEEN -1.12 AND -1.08 LIMIT 1"
     ).fetchone()["fire_event_id"]
     m = signature_metrics(conn, j20_id, config)
-    # Le foyer reste un événement distinct de Saumos (vérifié dans test_cluster) ;
-    # sa qualification est R3 par extension, à la marge du seuil.
-    assert m["n_passages"] >= 2 and m["extension_m"] >= config["qualification"]["e_mobile_m"]
-    assert _qualification(conn, j20_id) == "vegetation_confirme"
+    # Mouvement apparent (extension ≥ E_mobile) mais intensité sous le plancher.
+    assert m["extension_m"] >= config["qualification"]["e_mobile_m"]
+    assert m["frp_max"] < config["qualification"]["f_mobile_mw"]
+    assert _qualification(conn, j20_id) == "suspect_isole"
