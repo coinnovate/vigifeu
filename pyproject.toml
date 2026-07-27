@@ -8,6 +8,8 @@ dependencies = [
     "tenacity>=8.5",
     "apscheduler>=3.10,<4",
     "pyarrow>=17.0",   # archive_sweep : export Parquet (tâche planifiée en prod, Lot 1)
+    "shapely>=2.0",    # géométrie du moteur (hull, aire, intersections) — Lot 2, plan §1.1
+    "pyproj>=3.6",     # projection Lambert-93 (EPSG:2154) pour distances/aires justes — Lot 2
 ]
 
 [project.optional-dependencies]

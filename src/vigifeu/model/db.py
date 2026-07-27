@@ -7,6 +7,8 @@ Contrainte structurante : UN SEUL processus écrivain (le daemon scheduler).
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import sqlite3
 import tomllib
@@ -15,10 +17,28 @@ from pathlib import Path
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
 _MIGRATION_RE = re.compile(r"^(\d{3})_.+\.sql$")
 
+# Sections dont un changement doit être tracé dans les FireEvents (Spec 02 P4) :
+# elles décident du clustering et de la qualification. Un ajustement de commentaire
+# ou d'une section sans effet sur l'interprétation (firms, monitoring…) ne fait pas
+# bouger le hash — seules les valeurs qui qualifient comptent.
+_HASHED_SECTIONS = ("clustering", "qualification", "dedup", "overpass")
+
 
 def load_config(path: str | Path = "config/params.toml") -> dict:
     with open(path, "rb") as f:
         return tomllib.load(f)
+
+
+def config_hash(config: dict, sections: tuple[str, ...] = _HASHED_SECTIONS) -> str:
+    """Empreinte courte et stable des paramètres d'interprétation.
+
+    Sérialisation JSON canonique (clés triées) des seules sections décisionnelles,
+    sha256 tronqué à 12 hex. Entre dans `qualification_reason` et le contexte des
+    versions : chaque fiche sait avec quels paramètres elle a été produite (§5.3).
+    """
+    subset = {s: config.get(s, {}) for s in sections}
+    blob = json.dumps(subset, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:12]
 
 
 def connect(db_path: str | Path) -> sqlite3.Connection:

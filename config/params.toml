@@ -15,6 +15,37 @@ firms_bbox = "-5.5,41.0,10.0,51.5"
 # deux passages successifs.
 window_min = 30
 
+[clustering]
+# Spec 02 §4.2 — rattachement incrémental par passage. Ces valeurs décident de
+# la fusion/scission des événements (first_acq_at est contractuel) : leur hash
+# entre dans les versions de FireEvent (P4).
+d_link_m = 1500              # rayon de rattachement (~4 pixels VIIRS)
+d_link_grands_feux_m = 2500  # au-delà de n_hs_grand hotspots (sautes de feu)
+n_hs_grand = 100             # seuil « grand feu »
+t_gap_h = 48                 # 2 j sans détection ⇒ candidat perdu, nouvel événement
+# Spec 02 §4.5 — transitions de cycle de vie
+t_silence_h = 24             # actif → plus_detecte (2 groupes de passages VIIRS manqués)
+t_reprise_days = 7           # plus_detecte → archive ; fenêtre de reprise (§4.3)
+
+[qualification]
+# Spec 02 §5.1 — règles des trois signatures, ordre d'évaluation strict. Le hash
+# de cette section entre dans qualification_reason (explicabilité, P4).
+# R1 — source fixe (persistant-fixe)
+jours_distincts_fixe = 3
+e_fixe_m = 1200              # emprise max d'une source fixe (torchères multi-points)
+f_fixe_mw = 8               # FRP unitaire médian max
+n_promotion_days = 15        # suspect_source_fixe stable ⇒ candidat fixed_source
+# R3 — végétation (persistant-mobile)
+e_mobile_m = 400             # extension spatiale min entre passages
+n_franc = 8                 # feu franc dès le 1er passage (publiable sans mouvement)
+
+[dedup]
+# Spec 02 §6 — déduplication inter-satellites PAR PASSAGE : deux satellites voient
+# le même point physique à quelques minutes d'écart. Sans cette règle, l'ajout de
+# NOAA-21 gonflerait mécaniquement les comptages et dégraderait la qualification.
+window_min = 20              # fenêtres de passage qui se chevauchent à < 20 min
+radius_m = 375               # pixels à < 375 m (résolution VIIRS)
+
 [vigieau]
 # API publique VigiEau (restrictions d'eau, catégorie declaree — Spec 01 §3.6).
 # HYPOTHÈSE DE FORMAT (à vérifier contre l'API réelle) : GET {base_url}/zones
