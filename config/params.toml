@@ -15,6 +15,14 @@ firms_bbox = "-5.5,41.0,10.0,51.5"
 # deux passages successifs.
 window_min = 30
 
+[monitoring]
+# Spec 02 §9 — le silence d'une source est une information critique en saison.
+# Mécanisme principal : dead-man switch healthchecks.io (un ping manquant EST
+# l'alerte). Les URLs de ping sont des secrets → environnement, pas ce fichier :
+#   HEALTHCHECK_FIRMS_URL, HEALTHCHECK_BACKFILL_URL,
+#   HEALTHCHECK_ARCHIVE_URL, HEALTHCHECK_COLLECTION_URL
+gap_alert_hours = 24     # trou de collecte réussie au-delà → alerte (log + ping /fail)
+
 [archive]
 # Spec 01 §6 — SQLite = état vivant (fenêtre glissante), Parquet = archive intégrale.
 # La purge ne retire de SQLite que ce qui est DÉJÀ exporté, jamais un hotspot
