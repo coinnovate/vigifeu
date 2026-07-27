@@ -39,6 +39,14 @@ n_promotion_days = 15        # suspect_source_fixe stable ⇒ candidat fixed_sou
 e_mobile_m = 400             # extension spatiale min entre passages
 n_franc = 8                 # feu franc dès le 1er passage (publiable sans mouvement)
 
+[cells]
+# Spec 01 §4.3 / Spec 02 §7 — grille de cellules d'un feu (~750 m), état COURANT
+# en v1 (plan §1.2). L'état d'une cellule se lit par rapport à la dernière activité
+# du feu : front (dernières heures), récent (dernier jour), plus détecté au-delà.
+grid_m = 750
+t_front_h = 3            # cellule vue dans le dernier groupe de passages ⇒ front_actif
+t_recent_h = 24         # vue dans les dernières 24 h ⇒ recent ; au-delà ⇒ plus_detecte
+
 [dedup]
 # Spec 02 §6 — déduplication inter-satellites PAR PASSAGE : deux satellites voient
 # le même point physique à quelques minutes d'écart. Sans cette règle, l'ajout de
