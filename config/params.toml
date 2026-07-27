@@ -39,6 +39,12 @@ n_promotion_days = 15        # suspect_source_fixe stable ⇒ candidat fixed_sou
 e_mobile_m = 400             # extension spatiale min entre passages
 n_franc = 8                 # feu franc dès le 1er passage (publiable sans mouvement)
 
+[version]
+# Spec 02 §6 — mesures factuelles par version. area_ha = aire de l'enveloppe ×
+# facteur de remplissage (un feu ne brûle pas tout son enveloppe convexe) ;
+# catégorie `estimee`, toujours affichée comme estimation.
+area_fill_factor = 0.6
+
 [cells]
 # Spec 01 §4.3 / Spec 02 §7 — grille de cellules d'un feu (~750 m), état COURANT
 # en v1 (plan §1.2). L'état d'une cellule se lit par rapport à la dernière activité
