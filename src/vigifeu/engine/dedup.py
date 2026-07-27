@@ -61,15 +61,21 @@ def dedup_groups(hotspots: Sequence[Mapping], config: dict) -> dict[int, str]:
     proj = geo.project_rows([(h["id"], h["lat"], h["lon"]) for h in hs])
     times = {h["id"]: _parse(h["acq_at"]) for h in hs}
 
-    for i in range(len(hs)):
-        a = hs[i]
-        for j in range(i + 1, len(hs)):
-            b = hs[j]
+    # Tri temporel : la dédup n'apparie que des hotspots à < window ; en balayant
+    # par temps croissant, on s'arrête dès que l'écart dépasse la fenêtre (O(n·k)
+    # au lieu de O(n²) — un méga-feu étalé sur des jours n'appaire que le voisinage).
+    order = sorted(hs, key=lambda h: times[h["id"]])
+    for i in range(len(order)):
+        a = order[i]
+        ta = times[a["id"]]
+        xa, ya = proj[a["id"]]
+        for j in range(i + 1, len(order)):
+            b = order[j]
+            if (times[b["id"]] - ta).total_seconds() >= window_s:
+                break  # trié : aucun j suivant ne peut être dans la fenêtre
             if a["source_id"] == b["source_id"]:
                 continue  # dédup strictement inter-satellites
-            if abs((times[a["id"]] - times[b["id"]]).total_seconds()) >= window_s:
-                continue
-            (xa, ya), (xb, yb) = proj[a["id"]], proj[b["id"]]
+            xb, yb = proj[b["id"]]
             if math.hypot(xb - xa, yb - ya) >= radius_m:
                 continue
             union(a["id"], b["id"])
