@@ -15,6 +15,19 @@ firms_bbox = "-5.5,41.0,10.0,51.5"
 # deux passages successifs.
 window_min = 30
 
+[weather]
+# Open-Meteo (gratuit en phase R&D ; licence non-commerciale — bascule Météo-France
+# à trancher au lancement, cadrage §5.8). Le provider est un champ de weather_obs :
+# le changement de source est transparent pour le modèle.
+provider = "open-meteo"
+base_url = "https://api.open-meteo.com/v1/forecast"
+forecast_days = 2        # échéances de prévision récupérées (Spec 01 §3.4)
+timezone = "GMT"         # réponses en UTC (P7)
+timeout_s = 30
+max_retries = 3
+retry_wait_min_s = 5
+retry_wait_max_s = 60
+
 [firms]
 # https://firms.modaps.eosdis.nasa.gov/api/area/
 base_url = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
