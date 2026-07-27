@@ -7,6 +7,12 @@
   vigifeu archive                 — export Parquet des jours clos + purge de la fenêtre glissante
   vigifeu latence                 — statistiques de latence NRT (le jalon L0)
   vigifeu runs [N]                — derniers runs d'ingestion (défaut : 20)
+  vigifeu moteur                  — un cycle du moteur sur les nouveautés (clustering→versions)
+  vigifeu rejeu                   — reconstruit toute l'interprétation depuis hotspot_raw (P2)
+  vigifeu feux [N]                — derniers FireEvents (défaut : 30)
+  vigifeu sources                 — sources fixes candidates en attente de revue
+  vigifeu confirmer ID [type]     — confirme une source fixe candidate
+  vigifeu invalider ID            — rejette une source fixe candidate
 """
 
 from __future__ import annotations
@@ -110,6 +116,80 @@ def cmd_runs(n: int) -> None:
         )
 
 
+def cmd_moteur() -> None:
+    from vigifeu.engine.pipeline import process_cycle
+
+    conn, config = _open()
+    res = process_cycle(conn, config)
+    print(
+        f"moteur : {res['created']} créés, {res['attached']} rattachés, "
+        f"{res['merged']} fusions, {res['reprises']} reprises, "
+        f"{res['requalified']} requalifiés, {res['versioned']} versions, "
+        f"{res['promoted']} sources promues"
+    )
+
+
+def cmd_rejeu() -> None:
+    from vigifeu.engine.pipeline import process_cycle, reset_interpretation
+
+    conn, config = _open()
+    n = conn.execute("SELECT COUNT(*) AS n FROM hotspot_raw").fetchone()["n"]
+    print(f"rejeu de {n} hotspots — remise à zéro de l'interprétation…")
+    reset_interpretation(conn, config)
+    res = process_cycle(conn, config)
+    print(
+        f"terminé : {res['created']} feux, {res['merged']} fusions, "
+        f"{res['versioned']} versions, {res['promoted']} sources fixes candidates"
+    )
+    for r in conn.execute(
+        "SELECT qualification, COUNT(*) AS n FROM fire_event "
+        "GROUP BY qualification ORDER BY n DESC"
+    ):
+        print(f"  {r['qualification'] or '(non qualifié)':<22} {r['n']}")
+
+
+def cmd_feux(n: int) -> None:
+    conn, _ = _open()
+    for r in conn.execute(
+        "SELECT id, public_id, first_acq_at, last_acq_at, qualification, lifecycle "
+        "FROM fire_event ORDER BY last_acq_at DESC LIMIT ?", (n,)
+    ).fetchall():
+        print(
+            f"#{r['id']:<5} {r['first_acq_at']}→{r['last_acq_at']} "
+            f"{(r['qualification'] or '—'):<22} {r['lifecycle']:<12} {r['public_id'] or ''}"
+        )
+
+
+def cmd_sources() -> None:
+    from vigifeu.engine.fixed_source import list_candidates
+
+    conn, _ = _open()
+    rows = list_candidates(conn)
+    if not rows:
+        print("aucune source fixe candidate en attente")
+        return
+    for r in rows:
+        print(f"#{r['id']:<4} {r['lat']:.4f},{r['lon']:.4f} r={r['radius_m']:.0f}m "
+              f"{r['evidence_json']}")
+
+
+def cmd_confirmer(source_id: int, kind: str | None) -> None:
+    from vigifeu.engine.fixed_source import confirm_candidate
+
+    conn, _ = _open()
+    confirm_candidate(conn, source_id, stamp=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                      kind=kind)
+    print(f"source #{source_id} confirmée{f' ({kind})' if kind else ''}")
+
+
+def cmd_invalider(source_id: int) -> None:
+    from vigifeu.engine.fixed_source import invalidate_candidate
+
+    conn, _ = _open()
+    invalidate_candidate(conn, source_id, stamp=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    print(f"source #{source_id} invalidée")
+
+
 def main() -> None:
     args = sys.argv[1:]
     if not args:
@@ -131,6 +211,18 @@ def main() -> None:
             cmd_latence()
         case "runs":
             cmd_runs(int(rest[0]) if rest else 20)
+        case "moteur":
+            cmd_moteur()
+        case "rejeu":
+            cmd_rejeu()
+        case "feux":
+            cmd_feux(int(rest[0]) if rest else 30)
+        case "sources":
+            cmd_sources()
+        case "confirmer":
+            cmd_confirmer(int(rest[0]), rest[1] if len(rest) > 1 else None)
+        case "invalider":
+            cmd_invalider(int(rest[0]))
         case _:
             print(__doc__)
             sys.exit(1)

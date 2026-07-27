@@ -18,10 +18,13 @@ import logging
 import os
 import signal
 import sys
+from datetime import UTC, datetime
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+from vigifeu.engine.cluster import apply_lifecycle
 from vigifeu.engine.overpass import build_overpasses
+from vigifeu.engine.pipeline import process_cycle
 from vigifeu.ingest.firms import fetch_cycle, fetch_firms_backfill
 from vigifeu.model.archive import archive_sweep
 from vigifeu.model.db import connect, load_config, migrate, sync_satellite_sources
@@ -54,15 +57,33 @@ def main() -> None:
         )
         for r in err:
             log.error("fetch_firms %s %s: %s", r["source"], r["day"], r["error"])
-        # Étape 2 du cycle (Spec 02 §3) : rattacher les nouveaux hotspots aux passages.
+        # Étapes 2→7 du cycle (Spec 02 §3) : passages puis moteur d'interprétation.
         if total_new:
             ov = build_overpasses(conn, config)
             log.info(
                 "overpass: %d rattachés, %d nouveaux passages",
                 ov["n_attached"], ov["n_new_overpasses"],
             )
+            res = process_cycle(conn, config)
+            log.info(
+                "moteur: %d créés, %d rattachés, %d fusions, %d reprises, "
+                "%d requalifiés, %d versions, %d sources promues",
+                res["created"], res["attached"], res["merged"], res["reprises"],
+                res["requalified"], res["versioned"], res["promoted"],
+            )
         if not err:
             ping_healthcheck(os.environ.get("HEALTHCHECK_FIRMS_URL"))
+
+    def job_lifecycle() -> None:
+        # Passe horaire (Spec 02 §4.5) : transitions des feux sans nouveauté
+        # (actif → plus_detecte → archive) contre l'heure courante.
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        res = apply_lifecycle(conn, config, clock=now)
+        if res["to_plus_detecte"] or res["to_archive"]:
+            log.info(
+                "cycle de vie: %d → plus_detecte, %d → archive",
+                res["to_plus_detecte"], res["to_archive"],
+            )
 
     def job_backfill() -> None:
         results = fetch_firms_backfill(conn, config)
@@ -103,6 +124,10 @@ def main() -> None:
         id="gap_check", max_instances=1, coalesce=True,
     )
     scheduler.add_job(
+        job_lifecycle, "interval", hours=1,
+        id="lifecycle", max_instances=1, coalesce=True,
+    )
+    scheduler.add_job(
         job_archive, "cron", hour=3, minute=30,   # nuit, hors pics de collecte
         id="archive_sweep", max_instances=1, coalesce=True,
     )
@@ -116,7 +141,8 @@ def main() -> None:
     signal.signal(signal.SIGINT, _shutdown)
 
     log.info(
-        "démarrage — fetch immédiat puis toutes les %d min ; backfill+gap horaires ; archive 03h30",
+        "démarrage — fetch+moteur immédiat puis toutes les %d min ; "
+        "backfill+gap+cycle de vie horaires ; archive 03h30",
         config["firms"]["fetch_interval_min"],
     )
     job_fetch_firms()  # premier cycle sans attendre l'intervalle

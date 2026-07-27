@@ -1,0 +1,105 @@
+"""Orchestration d'un cycle de traitement (Spec 02 §3, étapes 3→7).
+
+Enchaîne, sur les seuls feux touchés par le cycle (jamais de recalcul global en
+nominal) :
+
+  3. marquage sources fixes   → mark_fixed_sources
+  4. clustering               → cluster_new_hotspots
+  5. qualification            → qualify_events (+ promotion des sources fixes)
+  6. version                  → create_version (économie §5 : pas les suspects stables)
+  7. cellules                 → rebuild_cells
+  (8. relations communes — Lot 3 ; 9. régénération — Lot 4)
+  + transitions de cycle de vie → apply_lifecycle
+
+La construction des passages (étape 2) est faite en amont par le scheduler
+(build_overpasses après le fetch). `reset_interpretation` + un `process_cycle`
+rejouent tout l'historique brut (P2) — c'est le rejeu Saumos.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from datetime import UTC, datetime
+
+from vigifeu.engine.cells import rebuild_cells
+from vigifeu.engine.cluster import apply_lifecycle, cluster_new_hotspots
+from vigifeu.engine.fixed_source import mark_fixed_sources, promote_candidates
+from vigifeu.engine.overpass import rebuild_overpasses
+from vigifeu.engine.qualify import qualify_events
+from vigifeu.engine.version import create_version
+
+_CONFIRME = "vegetation_confirme"
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _data_clock(conn: sqlite3.Connection) -> str | None:
+    """Horloge des données = dernière acquisition connue (référence des transitions
+    et de l'état des cellules ; en rejeu, jamais l'heure murale)."""
+    row = conn.execute("SELECT MAX(last_acq_at) AS m FROM fire_event").fetchone()
+    return row["m"] if row and row["m"] else None
+
+
+def process_cycle(conn: sqlite3.Connection, config: dict, *, stamp: str | None = None,
+                  clock: str | None = None, trigger_run_id: int | None = None) -> dict:
+    """Traite les hotspots nouvellement disponibles. Idempotent : sans nouveauté, no-op."""
+    stamp = stamp or _now_iso()
+
+    marked = mark_fixed_sources(conn, config)["marked"]
+    cl = cluster_new_hotspots(conn, config, stamp=stamp)
+    qual = qualify_events(conn, config, cl["touched"], stamp=stamp)
+    promoted = promote_candidates(conn, config, stamp=stamp)
+
+    clock = clock or _data_clock(conn)
+
+    versioned: list[int] = []
+    for eid in cl["touched"]:
+        fe = conn.execute(
+            "SELECT qualification, lifecycle FROM fire_event WHERE id=?", (eid,)
+        ).fetchone()
+        if fe is None or fe["lifecycle"] == "fusionne":
+            continue
+        # Économie de versionnage (§5, §5.2) : seuls les vegetation_confirme ont une
+        # fiche et une relecture de propagation. On ne verse une version que pour
+        # eux, ou pour un feu DÉJÀ versionné (donc publié) qui change d'état — une
+        # rétrogradation confirme → faux_positif s'affiche explicitement (§5.1).
+        # Un suspect qui reste suspect ne crée jamais de version.
+        has_version = conn.execute(
+            "SELECT 1 FROM fire_event_version WHERE fire_event_id=? LIMIT 1", (eid,)
+        ).fetchone() is not None
+        if fe["qualification"] == _CONFIRME or (eid in qual["changed"] and has_version):
+            rebuild_cells(conn, config, eid, clock=clock)
+            create_version(conn, config, eid, stamp=stamp,
+                           trigger_run_id=trigger_run_id, reprise=(eid in cl["reprises"]))
+            versioned.append(eid)
+
+    life = apply_lifecycle(conn, config, clock=clock)
+
+    return {
+        "marked": marked,
+        "created": cl["created"],
+        "attached": cl["attached"],
+        "merged": cl["merged"],
+        "reprises": len(cl["reprises"]),
+        "requalified": len(qual["changed"]),
+        "promoted": len(promoted),
+        "versioned": len(versioned),
+        "lifecycle": life,
+    }
+
+
+def reset_interpretation(conn: sqlite3.Connection, config: dict) -> None:
+    """Efface toute l'interprétation et reconstruit les passages (P2, rejeu).
+
+    Les observations (hotspot_raw) et le registre fixed_source (semi-manuel) sont
+    conservés ; seules les colonnes d'interprétation et les tables dérivées sont
+    remises à zéro. Un `process_cycle` ensuite reconstruit tout à l'identique.
+    """
+    for table in ("fe_hotspot", "fire_event_version", "fire_cell_state",
+                  "fe_fe_rel", "fe_commune_rel", "fire_event"):
+        conn.execute(f"DELETE FROM {table}")
+    conn.execute("UPDATE hotspot_raw SET fire_event_id=NULL, fixed_source_id=NULL")
+    conn.commit()
+    rebuild_overpasses(conn, config)
