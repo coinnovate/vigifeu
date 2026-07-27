@@ -7,12 +7,12 @@ dependencies = [
     "httpx>=0.27",
     "tenacity>=8.5",
     "apscheduler>=3.10,<4",
+    "pyarrow>=17.0",   # archive_sweep : export Parquet (tâche planifiée en prod, Lot 1)
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "pyarrow>=17.0",   # gel des fixtures en Parquet (Lot 0) puis archive (Lot 1)
 ]
 
 [project.scripts]
