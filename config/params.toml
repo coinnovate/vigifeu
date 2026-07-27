@@ -7,6 +7,14 @@ db_path = "data/vigifeu.db"
 # Zone d'interrogation FIRMS : France métropolitaine + marge (ouest,sud,est,nord)
 firms_bbox = "-5.5,41.0,10.0,51.5"
 
+[overpass]
+# Spec 02 §3 (étape 2) : un passage regroupe les hotspots d'un même satellite
+# dont les acquisitions tombent dans une même fenêtre. Un passage VIIRS au-dessus
+# de la France dure ~2-3 min (granules adjacents) ; les passages sont espacés de
+# ~100 min (période orbitale). 30 min regroupe un passage sans jamais fusionner
+# deux passages successifs.
+window_min = 30
+
 [firms]
 # https://firms.modaps.eosdis.nasa.gov/api/area/
 base_url = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
