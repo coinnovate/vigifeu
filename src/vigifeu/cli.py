@@ -4,6 +4,7 @@
   vigifeu fetch [YYYY-MM-DD]      — ingère un jour (défaut : aujourd'hui) pour tous les satellites
   vigifeu backfill A B            — ingère l'intervalle de jours [A, B] (constitution de fixtures)
   vigifeu backfill-gaps           — rattrape les jours à trous (runs en échec) jusqu'à J-7
+  vigifeu archive                 — export Parquet des jours clos + purge de la fenêtre glissante
   vigifeu latence                 — statistiques de latence NRT (le jalon L0)
   vigifeu runs [N]                — derniers runs d'ingestion (défaut : 20)
 """
@@ -66,6 +67,18 @@ def cmd_backfill_gaps() -> None:
         print(f"{r['source']:>18} {r['day']}: {r}")
 
 
+def cmd_archive() -> None:
+    from vigifeu.model.archive import archive_sweep
+
+    conn, config = _open()
+    res = archive_sweep(conn, config)
+    print(
+        f"archive : {res['exported_hotspots']} hotspots exportés, "
+        f"{res['purged_hotspots']} purgés ({res['protected_hotspots']} protégés), "
+        f"{res['purged_runs']} runs purgés"
+    )
+
+
 def cmd_latence() -> None:
     conn, _ = _open()
     rows = conn.execute(
@@ -112,6 +125,8 @@ def main() -> None:
             cmd_backfill(rest[0], rest[1])
         case "backfill-gaps":
             cmd_backfill_gaps()
+        case "archive":
+            cmd_archive()
         case "latence":
             cmd_latence()
         case "runs":

@@ -15,6 +15,14 @@ firms_bbox = "-5.5,41.0,10.0,51.5"
 # deux passages successifs.
 window_min = 30
 
+[archive]
+# Spec 01 §6 — SQLite = état vivant (fenêtre glissante), Parquet = archive intégrale.
+# La purge ne retire de SQLite que ce qui est DÉJÀ exporté, jamais un hotspot
+# rattaché à un feu non archivé (un méga-feu peut vivre plus de 14 jours).
+dir = "data/archive"                  # racine des partitions Parquet (annee/mois/jour)
+hotspot_retention_days = 14           # fenêtre glissante hotspot_raw
+ingestion_run_retention_days = 90     # rétention du journal d'ingestion
+
 [weather]
 # Open-Meteo (gratuit en phase R&D ; licence non-commerciale — bascule Météo-France
 # à trancher au lancement, cadrage §5.8). Le provider est un champ de weather_obs :
