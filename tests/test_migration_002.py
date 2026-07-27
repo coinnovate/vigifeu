@@ -49,8 +49,9 @@ def _colonnes(c: sqlite3.Connection, table: str) -> set[str]:
 
 
 def test_version_schema(conn):
+    """La migration 002 (et les suivantes) sont appliquées."""
     v = conn.execute("SELECT MAX(version) AS v FROM schema_version").fetchone()["v"]
-    assert v == 2
+    assert v >= 2
 
 
 def test_toutes_les_tables_presentes(conn):
