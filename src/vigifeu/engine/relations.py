@@ -138,11 +138,13 @@ def _reconcile(conn, fire_event_id, desired, *, version_id, stamp) -> dict:
     open_map = {(r["code_insee"], r["rel_type"]): r["id"] for r in open_rows}
     desired_keys = {(code, rt) for code, (rt, _) in desired.items()}
 
+    touched: set[str] = set()
     closed = 0
-    for key, rid in open_map.items():
-        if key not in desired_keys:
+    for (code, rt), rid in open_map.items():
+        if (code, rt) not in desired_keys:
             conn.execute("UPDATE fe_commune_rel SET valid_to=? WHERE id=?", (stamp, rid))
             closed += 1
+            touched.add(code)
 
     opened = 0
     for code, (rt, dist) in desired.items():
@@ -154,8 +156,10 @@ def _reconcile(conn, fire_event_id, desired, *, version_id, stamp) -> dict:
                 (fire_event_id, code, rt, dist, stamp, version_id),
             )
             opened += 1
+            touched.add(code)
     conn.commit()
-    return {"opened": opened, "closed": closed, "current": len(desired)}
+    return {"opened": opened, "closed": closed, "current": len(desired),
+            "communes": sorted(touched)}
 
 
 def compute_commune_relations(
@@ -173,5 +177,7 @@ def compute_commune_relations(
     """
     index = get_commune_index(conn)
     footprint = fire_footprint_l93(conn, config, fire_event_id)
+    if footprint is None or len(index) == 0:
+        return {"opened": 0, "closed": 0, "current": 0, "communes": []}
     desired = _desired_relations(footprint, index, config)
     return _reconcile(conn, fire_event_id, desired, version_id=version_id, stamp=stamp)

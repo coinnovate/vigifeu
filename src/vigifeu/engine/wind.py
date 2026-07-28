@@ -58,7 +58,7 @@ def recompute_direction_vent(
     index = get_commune_index(conn)
     footprint = fire_footprint_l93(conn, config, fire_event_id)
     if len(index) == 0 or footprint is None:
-        return {"opened": 0, "closed": 0, "current": 0}
+        return {"opened": 0, "closed": 0, "current": 0, "communes": []}
 
     n = config["relations"]["n_hysteresis"]
     recent = conn.execute(
@@ -68,7 +68,7 @@ def recompute_direction_vent(
         (fire_event_id, n),
     ).fetchall()
     if not recent:
-        return {"opened": 0, "closed": 0, "current": 0}
+        return {"opened": 0, "closed": 0, "current": 0, "communes": []}
 
     centroid = footprint.centroid
     origin = (centroid.x, centroid.y)
@@ -83,6 +83,7 @@ def recompute_direction_vent(
     open_codes = {r["code_insee"]: r["id"] for r in open_rows}
 
     opened = closed = 0
+    touched: set[str] = set()
     # Ouverture : dès la première mesure dans le secteur.
     for code in current_in:
         if code not in open_codes:
@@ -92,6 +93,7 @@ def recompute_direction_vent(
                 (fire_event_id, code, REL, stamp),
             )
             opened += 1
+            touched.add(code)
     # Fermeture : seulement après n_hysteresis mesures consécutives hors secteur.
     for code, rid in open_codes.items():
         if code in current_in:
@@ -99,6 +101,8 @@ def recompute_direction_vent(
         if len(recent_sets) >= n and all(code not in s for s in recent_sets):
             conn.execute("UPDATE fe_commune_rel SET valid_to=? WHERE id=?", (stamp, rid))
             closed += 1
+            touched.add(code)
 
     conn.commit()
-    return {"opened": opened, "closed": closed, "current": len(current_in)}
+    return {"opened": opened, "closed": closed, "current": len(current_in),
+            "communes": sorted(touched)}

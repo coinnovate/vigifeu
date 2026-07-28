@@ -26,6 +26,7 @@ from vigifeu.engine import geo
 from vigifeu.engine.cluster import apply_lifecycle
 from vigifeu.engine.overpass import build_overpasses
 from vigifeu.engine.pipeline import process_cycle
+from vigifeu.engine.regen import enqueue_fire_update
 from vigifeu.engine.relations import fire_footprint_l93
 from vigifeu.engine.wind import recompute_direction_vent
 from vigifeu.ingest.firms import fetch_cycle, fetch_firms_backfill
@@ -112,6 +113,10 @@ def main() -> None:
             ).fetchone()
             rel = recompute_direction_vent(conn, config, f["id"], stamp=obs["observed_at"])
             n_rel += rel["opened"] + rel["closed"]
+            # §8 : nouvelle weather_obs ⇒ fiche feu + fiches communes direction_vent
+            # (pas la carte : un changement de vent n'est pas une nouvelle version).
+            enqueue_fire_update(conn, f["id"], rel["communes"],
+                                stamp=obs["observed_at"], trigger="weather_obs", carte=False)
         if fires:
             log.info(
                 "weather_obs: %d/%d feux échantillonnés, %d relations direction_vent modifiées",

@@ -134,4 +134,4 @@ def test_noop_sans_commune(db):
     invalidate_commune_index(conn)
     _fire_with_cell(conn, 45.00, -1.00)
     r = compute_commune_relations(conn, config, 1, version_id=None, stamp="2026-07-22T12:00:00Z")
-    assert r == {"opened": 0, "closed": 0, "current": 0}
+    assert r == {"opened": 0, "closed": 0, "current": 0, "communes": []}
