@@ -1,0 +1,36 @@
+{% extends "base.html.j2" %}
+{#
+  Page liste département (Spec 04 §5) — structure de crawl légère : feux suivis du
+  département + communes du périmètre. Contenu complet sans JS.
+#}
+{% block content %}
+<article class="page departement">
+<h1>Incendies dans le département {{ dept }}</h1>
+
+<section class="feux">
+<h2>Feux suivis</h2>
+{% if feux %}
+<ul>
+{% for f in feux %}
+<li><a href="{{ f.url }}">{{ f.nom }}</a></li>
+{% endfor %}
+</ul>
+{% else %}
+<p>Aucun feu de végétation suivi actuellement dans le département.</p>
+{% endif %}
+</section>
+
+<section class="communes">
+<h2>Communes du périmètre</h2>
+{% if communes %}
+<ul class="colonnes">
+{% for c in communes %}
+<li><a href="{{ c.href }}">{{ c.nom }}</a></li>
+{% endfor %}
+</ul>
+{% else %}
+<p>Aucune commune référencée pour l'instant.</p>
+{% endif %}
+</section>
+</article>
+{% endblock %}

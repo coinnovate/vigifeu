@@ -51,8 +51,11 @@ def build_sitemaps(conn: sqlite3.Connection, config: dict) -> dict:
                     "   OR c.code_insee IN (SELECT code_insee FROM commune_fire_history) "
                     "ORDER BY c.code_insee")]
 
+    from vigifeu.generate.departement import depts_du_perimetre
+
     pages = [(f"{base}/", None), (f"{base}/methodologie/", None),
              (f"{base}/mentions-legales/", None), (f"{base}/cgu/", None)]
+    pages += [(f"{base}/departements/{d}/", None) for d in depts_du_perimetre(conn)]
 
     write_atomic(site / "sitemap-feux.xml", _urlset(feux))
     write_atomic(site / "sitemap-communes.xml", _urlset(communes))

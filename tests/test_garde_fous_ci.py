@@ -95,6 +95,18 @@ def test_garde_fou_5_aucun_horodatage_generation(site):
     assert no_generation_timestamp(site) == []
 
 
+def test_pages_departements_generees(site):
+    """Les pages liste départements existent (fil d'Ariane commune → dept, pas de 404)."""
+    dept33 = Path(site) / "departements" / "33" / "index.html"
+    assert dept33.exists()
+    page = dept33.read_text(encoding="utf-8")
+    assert "Incendies dans le département 33" in page
+    assert "/communes/33503-saumos/" in page          # commune du périmètre
+    assert "/feux/2026-saumos/" in page                # feu suivi du département
+    # présent au sitemap
+    assert "/departements/33/" in (Path(site) / "sitemap-pages.xml").read_text(encoding="utf-8")
+
+
 def test_maplibre_exclu_du_budget_mais_present(site):
     """La lib carte est vendorisée (hors budget fiche) mais bien servie."""
     assert (Path(site) / "static" / "js" / "maplibre-gl.js").exists()

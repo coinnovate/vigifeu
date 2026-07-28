@@ -23,6 +23,7 @@ from jinja2 import Environment
 from vigifeu.generate.carte import load_carte_context, render_carte
 from vigifeu.generate.commune import load_commune_context, render_commune
 from vigifeu.generate.feu import load_fire_context, render_feu
+from vigifeu.generate.departement import build_departements
 from vigifeu.generate.geojson import feu_geojson, national_geojson
 from vigifeu.generate.og import write_og_images
 from vigifeu.generate.pages import build_static_pages
@@ -93,6 +94,7 @@ def finalize_site(conn: sqlite3.Connection, config: dict, env: Environment | Non
     env = env or make_env(config["generate"]["templates_dir"])
     stats = {
         "pages": build_static_pages(conn, config, env),
+        "departements": build_departements(conn, config, env),
         "sitemaps": build_sitemaps(conn, config),
         "redirects": build_redirects(conn, config),
     }
