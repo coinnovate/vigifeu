@@ -71,7 +71,10 @@ def refresh_commune_context(
 
     if v_on:
         for c in communes:
-            res["vigieau_inserted"] += fetch_vigieau(conn, config, c["code_insee"]).get("inserted", 0)
+            res["vigieau_inserted"] += fetch_vigieau(
+                conn, config, c["code_insee"],
+                lat=c["centroid_lat"], lon=c["centroid_lon"],
+            ).get("inserted", 0)
 
     if d_on:
         for c in communes:

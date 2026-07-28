@@ -80,7 +80,7 @@ def test_flag_on_orchestre(db, monkeypatch):
     _scenario(conn)
     v, effis, mf = [], [], []
     monkeypatch.setattr(commune_context, "fetch_vigieau",
-                        lambda conn, cfg, code: v.append(code) or {"inserted": 1})
+                        lambda conn, cfg, code, **k: v.append(code) or {"inserted": 1})
     monkeypatch.setattr(commune_context, "fetch_effis_fwi",
                         lambda conn, cfg, **k: effis.append(k["code_insee"]) or {"inserted": 2})
     monkeypatch.setattr(commune_context, "fetch_meteo_forets",

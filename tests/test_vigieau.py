@@ -87,6 +87,32 @@ def test_niveau_inconnu_ignore(commune, monkeypatch):
     assert r["inserted"] == 0
 
 
+class _Resp:
+    def __init__(self, status_code, payload=None, text=""):
+        self.status_code = status_code
+        self._payload = payload
+        self.text = text
+
+    def json(self):
+        return self._payload
+
+
+def test_409_pas_de_retry(commune, monkeypatch):
+    """409 (commune multi-zones) = pas de restriction déterminable, traité en 1 appel."""
+    conn, config = commune
+    calls = []
+
+    def fake_get(url, params=None, timeout=None):
+        calls.append(params)
+        return _Resp(409, text="conflict")
+
+    monkeypatch.setattr(vigieau.httpx, "get", fake_get)
+    r = vigieau.fetch_vigieau(conn, config, "33333", lat=44.9, lon=-1.0)
+    assert r["inserted"] == 0
+    assert len(calls) == 1  # aucun retry sur 409
+    assert calls[0]["lat"] == 44.9 and calls[0]["lon"] == -1.0  # centroïde transmis
+
+
 def test_panne_ne_bloque_pas(commune, monkeypatch):
     conn, config = commune
 

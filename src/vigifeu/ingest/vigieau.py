@@ -55,8 +55,12 @@ def _fetch_json(url: str, params: dict, config: dict) -> object:
         resp = httpx.get(url, params=params, timeout=v["timeout_s"])
         if resp.status_code in (429, 500, 502, 503, 504):
             raise VigieauError(f"HTTP {resp.status_code} (réessayable)")
-        if resp.status_code == 404:
-            return []  # commune sans zone connue = pas de restriction
+        # 404 = commune sans zone ; 409 = commune multi-zones interrogée sans point
+        # (ambiguïté). Dans les deux cas : pas de restriction déterminable → liste vide,
+        # JAMAIS de retry (le 409 coûtait ~15 s de backoff inutile par commune). Passer
+        # lat/lon (centroïde) désambiguïse et évite le 409 à la source.
+        if resp.status_code in (404, 409):
+            return []
         if resp.status_code != 200:
             raise VigieauError(f"HTTP {resp.status_code}: {resp.text[:200]}")
         return resp.json()
@@ -95,14 +99,21 @@ def _parse_zones(payload: object) -> dict | None:
     return meilleure
 
 
-def fetch_vigieau(conn: sqlite3.Connection, config: dict, code_insee: str) -> dict:
+def fetch_vigieau(
+    conn: sqlite3.Connection, config: dict, code_insee: str,
+    *, lat: float | None = None, lon: float | None = None,
+) -> dict:
     """Récupère et enregistre la restriction d'eau courante d'une commune.
 
-    Ne lève jamais (Spec 02 §9) : une source en panne dégrade la fiche sans la
-    bloquer. Retourne {status, inserted|reason|error}.
+    `lat`/`lon` (centroïde) désambiguïsent les communes multi-zones : sans eux
+    l'API renvoie 409. Ne lève jamais (Spec 02 §9) : une source en panne dégrade la
+    fiche sans la bloquer. Retourne {status, inserted|reason|error}.
     """
     v = config["vigieau"]
     params = {"commune": code_insee, "profil": v["profil"]}
+    if lat is not None and lon is not None:
+        params["lat"] = lat
+        params["lon"] = lon
     try:
         payload = _fetch_json(f"{v['base_url']}/zones", params, config)
         restriction = _parse_zones(payload)
