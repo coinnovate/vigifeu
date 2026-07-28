@@ -1,0 +1,90 @@
+{% extends "base.html.j2" %}
+{#
+  Fiche commune (Spec 03 §4). Complète même hors événement (§4.8) : c'est la valeur
+  hors saison et le maillage SEO. Ton neutre — « aucune détection » n'est pas
+  « aucun risque ». Phrases issues du lexique (via commune.py).
+#}
+{% block content %}
+<article class="fiche-commune">
+
+<header>
+<h1>Incendies à {{ nom_dept }}</h1>
+<p class="meta">
+{% if population %}Population : {{ population }}{% if millesime %} (millésime {{ millesime }}){% endif %}. {% endif %}
+{% if epci %}EPCI : {{ epci }}.{% endif %}
+</p>
+</header>
+
+{# 4.2 Situation en cours — « suis-je concerné ? » #}
+<section class="situation">
+<h2>Situation en cours</h2>
+{% if situation %}
+{% for item in situation %}
+<p>{{ item.phrase }}. {% if item.href %}<a href="{{ item.href }}">Voir la fiche du feu</a>{% endif %}</p>
+{% endfor %}
+{% else %}
+<p>{{ aucun_feu }}.</p>
+{% endif %}
+</section>
+
+{# 4.3 Contexte du jour — VigiEau (armé) + sécheresse (dégradée) #}
+<section class="contexte">
+<h2>Contexte du jour</h2>
+{% if contexte.vigieau %}<p>{{ contexte.vigieau }}.</p>{% endif %}
+{% if contexte.meteo_forets %}<p>{{ contexte.meteo_forets }}.</p>{% endif %}
+{% if contexte.fwi %}<p>{{ contexte.fwi }}.</p>{% endif %}
+{% if contexte.secheresse_indispo %}
+<p class="indispo">Danger sécheresse (Météo des forêts, FWI/DC) momentanément indisponible (source en cours d'intégration).</p>
+{% endif %}
+{% if not contexte.vigieau and not contexte.secheresse_indispo and not contexte.meteo_forets %}
+<p>Aucune restriction ni alerte sécheresse en cours sur la commune.</p>
+{% endif %}
+</section>
+
+{# 4.4 Historique incendies #}
+<section class="historique">
+<h2>Historique des incendies</h2>
+<p>{{ historique.synthese }}.</p>
+{% if historique.notables %}
+<h3>Événements notables</h3>
+<table>
+<thead><tr><th>Année</th><th>Surface</th><th>Type</th></tr></thead>
+<tbody>
+{% for e in historique.notables %}
+<tr><td>{{ e.annee }}</td><td>{% if e.surface %}{{ e.surface }} ha{% else %}—{% endif %}</td><td>{{ e.type or "—" }}</td></tr>
+{% endfor %}
+</tbody>
+</table>
+{% endif %}
+{% if historique.suivis %}
+<h3>Feux suivis par {{ marque }}</h3>
+<ul>
+{% for f in historique.suivis %}
+<li>{{ f.phrase }} — <a href="{{ f.href }}">fiche du feu</a></li>
+{% endfor %}
+</ul>
+{% endif %}
+</section>
+
+{# 4.5 Exposition structurelle #}
+{% if exposition %}
+<section class="exposition">
+<h2>Exposition structurelle</h2>
+<p>{{ exposition }}.</p>
+</section>
+{% endif %}
+
+{# 4.6 Réglementaire — catégorie declaree #}
+{% if reglementaire %}
+<section class="reglementaire">
+<h2>Réglementaire</h2>
+<ul>
+{% for r in reglementaire %}
+<li>{{ r }}</li>
+{% endfor %}
+</ul>
+</section>
+{% endif %}
+
+</article>
+{% endblock %}

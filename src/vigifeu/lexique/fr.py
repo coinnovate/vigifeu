@@ -370,6 +370,61 @@ def phrase_vigieau(niveau: str, date_arrete: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Fiche commune — situation en cours (Spec 03 §4.2) et historique (§4.4)       #
+# --------------------------------------------------------------------------- #
+
+def commune_aucun_feu(derniere_obs: str, *, rayon_km: int = 20) -> str:
+    """« Suis-je concerné ? » — aucun feu suivi (Spec 03 §4.2). Jamais « aucun risque »."""
+    return (
+        f"Aucun incendie suivi actuellement sur la commune ou à moins de {rayon_km} km "
+        f"(dernière observation satellite : {horodatage(derniere_obs)})"
+    )
+
+
+def commune_relation_emprise(nom: str) -> str:
+    """Relation active `emprise_dans_commune` (Spec 03 §4.2)."""
+    return f"L'incendie de {nom} a une emprise sur la commune"
+
+
+def commune_relation_distance(nom: str, km: float) -> str:
+    """Relation active de proximité `a_moins_de_Nkm` (Spec 03 §4.2)."""
+    return f"L'incendie de {nom} est suivi à {nombre_fr(km, 1)} km de la limite communale"
+
+
+def commune_relation_vent(nom: str, heure: str) -> str:
+    """Relation active `direction_vent` (Spec 03 §4.2) — fait composé, double horodatage."""
+    return (
+        f"La commune se trouve dans la direction actuelle du vent par rapport "
+        f"à l'incendie de {nom} (vent de {heure_utc(heure)})"
+    )
+
+
+def commune_feu_suivi_intervalle(nom: str, valid_from: str, valid_to: str | None) -> str:
+    """Feu Vigifeu ayant concerné la commune, relation ouverte ou fermée (Spec 03 §4.4)."""
+    if valid_to is None:
+        return f"Concernée par le feu de {nom} depuis le {date_fr(valid_from)}"
+    return f"Concernée par le feu de {nom} du {date_fr(valid_from)} au {date_fr(valid_to)}"
+
+
+def commune_historique_bdiff(n: int, surface_ha_totale: float | None, depuis: int) -> str:
+    """Synthèse de l'historique BDIFF de la commune (Spec 03 §4.4)."""
+    if n == 0:
+        return f"Aucun incendie de végétation recensé depuis {depuis} (BDIFF)"
+    surf = ""
+    if surface_ha_totale:
+        surf = f" — surface cumulée {nombre_fr(surface_ha_totale)} ha"
+    return f"Depuis {depuis}, {n} incendie{'s' if n > 1 else ''} recensé{'s' if n > 1 else ''} (BDIFF){surf}"
+
+
+def commune_exposition_foret(part_pct: float, surface_forestiere_ha: float) -> str:
+    """Exposition structurelle — surface forestière et part du territoire (Spec 03 §4.5)."""
+    return (
+        f"Surface forestière : environ {nombre_fr(surface_forestiere_ha)} ha, "
+        f"soit {nombre_fr(part_pct)} % du territoire communal"
+    )
+
+
+# --------------------------------------------------------------------------- #
 # 2.6 — Latence et fraîcheur                                                  #
 # --------------------------------------------------------------------------- #
 

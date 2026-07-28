@@ -244,6 +244,33 @@ def test_phrase_vigieau_declaree():
 
 # --- 2.6 latence / 2.7 attributions ----------------------------------------
 
+def test_commune_situation():
+    assert (
+        fr.commune_aucun_feu("2026-07-28T05:00:00Z")
+        == "Aucun incendie suivi actuellement sur la commune ou à moins de 20 km "
+           "(dernière observation satellite : 28/07/2026 à 05:00 UTC)"
+    )
+    assert fr.commune_relation_emprise("Saumos") == "L'incendie de Saumos a une emprise sur la commune"
+    assert (fr.commune_relation_distance("Saumos", 3.4)
+            == "L'incendie de Saumos est suivi à 3,4 km de la limite communale")
+    assert "direction actuelle du vent" in fr.commune_relation_vent("Saumos", "2026-07-24T12:00:00Z")
+    # jamais « aucun risque » (Spec 03 §4.8)
+    assert "risque" not in fr.commune_aucun_feu("2026-07-28T05:00:00Z").lower()
+
+
+def test_commune_historique_et_intervalles():
+    assert (
+        fr.commune_feu_suivi_intervalle("Saumos", "2026-07-22T00:00:00Z", "2026-07-26T00:00:00Z")
+        == "Concernée par le feu de Saumos du 22/07/2026 au 26/07/2026"
+    )
+    assert fr.commune_feu_suivi_intervalle("Saumos", "2026-07-22T00:00:00Z", None) \
+        == "Concernée par le feu de Saumos depuis le 22/07/2026"
+    assert fr.commune_historique_bdiff(0, None, 2006) == "Aucun incendie de végétation recensé depuis 2006 (BDIFF)"
+    assert (fr.commune_historique_bdiff(3, 1250, 2006)
+            == "Depuis 2006, 3 incendies recensés (BDIFF) — surface cumulée 1 250 ha")
+    assert fr.commune_historique_bdiff(1, 40, 2006).startswith("Depuis 2006, 1 incendie recensé (BDIFF)")
+
+
 def test_bloc_latence():
     p = fr.bloc_latence("2026-07-24T12:00:00Z")
     assert "délai de traitement de 1 à 3 h" in p

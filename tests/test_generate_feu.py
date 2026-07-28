@@ -17,6 +17,7 @@ GOLDEN = Path(__file__).parent / "fixtures" / "golden" / "feu-2026-saumos.html"
 from vigifeu.engine.overpass import build_overpasses
 from vigifeu.engine.pipeline import process_cycle
 from vigifeu.engine.relations import invalidate_commune_index
+from vigifeu.generate.commune import load_commune_context, render_commune
 from vigifeu.generate.feu import load_fire_context, render_feu
 from vigifeu.generate.publish import ensure_public_id
 from vigifeu.generate.templating import make_env
@@ -124,6 +125,54 @@ def test_aucun_horodatage_de_generation(html):
     # toutes les heures affichées portent « UTC » (données) ; pas de fuseau local ni de « généré le »
     assert "généré" not in page.lower()
     assert "generated" not in page.lower()
+
+
+SAUMOS, LE_PORGE = "33503", "33333"
+
+
+@pytest.fixture(scope="module")
+def commune_html(saumos_archive):
+    conn, config, _ = saumos_archive
+    env = make_env(config["generate"]["templates_dir"])
+    ctx = load_commune_context(conn, config, SAUMOS)
+    return ctx, render_commune(env, ctx)
+
+
+def test_commune_entete_et_situation(commune_html):
+    ctx, page = commune_html
+    assert ctx["nom"] == "Saumos"
+    assert "Incendies à Saumos (33)" in page
+    # Saumos est archivé → pas de feu actif, mais fiche complète (§4.8)
+    assert ctx["aucun_feu"] is not None
+    assert "Aucun incendie suivi actuellement" in page
+    assert "aucun risque" not in page.lower()  # ton neutre, jamais rassurant
+
+
+def test_commune_historique_liste_le_feu_suivi(commune_html):
+    ctx, page = commune_html
+    # le feu de Saumos (archivé) apparaît dans « feux suivis », avec lien vers sa fiche
+    suivis = ctx["historique"]["suivis"]
+    assert any("Saumos" in s["phrase"] for s in suivis)
+    assert any(s["href"] == "/feux/2026-saumos/" for s in suivis)
+    assert "Feux suivis par Sentifeu" in page
+    assert "/feux/2026-saumos/" in page
+
+
+def test_commune_contexte_secheresse_degrade(commune_html):
+    ctx, page = commune_html
+    # drought non armé → bloc dégradé (P6), pas un trou silencieux
+    assert ctx["contexte"]["secheresse_indispo"] is True
+    assert "momentanément indisponible" in page
+
+
+def test_commune_structure_lint_et_marque(commune_html):
+    ctx, page = commune_html
+    assert page.startswith("<!doctype html>")
+    assert "| Sentifeu</title>" in page
+    assert "canonical\" href=\"https://sentifeu.fr/communes/33503-saumos/\"" in page
+    bas = page.lower()
+    for terme in fr.TERMES_INTERDITS:
+        assert terme.lower() not in bas, f"terme interdit : {terme!r}"
 
 
 def test_runner_consomme_regen_queue(saumos_archive, tmp_path):

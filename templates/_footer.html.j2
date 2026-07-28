@@ -4,7 +4,7 @@
 #}
 <footer class="pied">
 
-<p class="latence">{{ latence_texte }}</p>
+{% if latence_texte %}<p class="latence">{{ latence_texte }}</p>{% endif %}
 
 <aside class="limites">
 <h2>Limites</h2>

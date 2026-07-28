@@ -18,6 +18,7 @@ from pathlib import Path
 
 from jinja2 import Environment
 
+from vigifeu.generate.commune import load_commune_context, render_commune
 from vigifeu.generate.feu import load_fire_context, render_feu
 from vigifeu.generate.publish import ensure_public_id
 from vigifeu.generate.templating import make_env
@@ -35,10 +36,20 @@ def _handle_feu(conn, config, env, page_ref, site_dir) -> Path | None:
     return write_atomic(page_path(site_dir, "feu", public_id), html)
 
 
+def _handle_commune(conn, config, env, page_ref, site_dir) -> Path | None:
+    """Génère la fiche d'une commune. `page_ref` = code INSEE ; l'URL porte code-slug."""
+    row = conn.execute("SELECT slug FROM commune WHERE code_insee=?", (page_ref,)).fetchone()
+    if row is None:
+        return None
+    ctx = load_commune_context(conn, config, page_ref)
+    html = render_commune(env, ctx)
+    return write_atomic(page_path(site_dir, "commune", f"{page_ref}-{row['slug']}"), html)
+
+
 _HANDLERS = {
     "feu": _handle_feu,
-    # "commune": _handle_commune,   # étape C
-    # "carte": _handle_carte,       # étape C
+    "commune": _handle_commune,
+    # "carte": _handle_carte,       # étape C — carte nationale (MapTiler)
 }
 
 
