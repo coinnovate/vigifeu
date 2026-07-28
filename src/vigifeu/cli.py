@@ -18,6 +18,7 @@
   vigifeu bdiff-import PATH [--replace]
                                   — importe l'historique BDIFF (CSV, cumulatif ; --replace efface d'abord)
   vigifeu contexte                — tire drought/vigieau des communes concernées (flags config)
+  vigifeu generer [--limit N]     — régénère les pages en attente dans regen_queue (Lot 4)
 """
 
 from __future__ import annotations
@@ -226,6 +227,20 @@ def cmd_bdiff_import(path: str, replace: bool) -> None:
     )
 
 
+def cmd_generer(limit: int | None) -> None:
+    from vigifeu.generate.runner import consume, sync_static
+
+    conn, config = _open()
+    sync_static(config)
+    stamp = datetime.now(UTC).isoformat()
+    stats = consume(conn, config, stamp=stamp, limit=limit)
+    print(
+        f"généré : {stats['feu']} feux, {stats['commune']} communes, {stats['carte']} carte "
+        f"— {stats['differe']} différées, {stats['erreurs']} erreurs "
+        f"→ {config['generate']['site_dir']}"
+    )
+
+
 def cmd_contexte() -> None:
     from vigifeu.engine.commune_context import refresh_commune_context
 
@@ -279,6 +294,8 @@ def main() -> None:
             cmd_bdiff_import(rest[0], "--replace" in rest)
         case "contexte":
             cmd_contexte()
+        case "generer":
+            cmd_generer(int(_flag(rest, "limit")) if _flag(rest, "limit") else None)
         case _:
             print(__doc__)
             sys.exit(1)

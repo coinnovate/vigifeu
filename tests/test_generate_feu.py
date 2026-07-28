@@ -126,6 +126,46 @@ def test_aucun_horodatage_de_generation(html):
     assert "generated" not in page.lower()
 
 
+def test_runner_consomme_regen_queue(saumos_archive, tmp_path):
+    """Le runner écrit la fiche feu, marque la file, et diffère commune/carte (étape C)."""
+    import copy
+
+    from vigifeu.engine.regen import enqueue
+    from vigifeu.generate.runner import consume, sync_static
+
+    conn, config, saumos_id = saumos_archive
+    cfg = copy.deepcopy(config)
+    cfg["generate"]["site_dir"] = str(tmp_path / "site")
+
+    enqueue(conn, "feu", str(saumos_id), stamp="2026-07-28T00:00:00Z")
+    enqueue(conn, "carte", "france", stamp="2026-07-28T00:00:00Z")
+    conn.commit()
+
+    sync_static(cfg)
+    stats = consume(conn, cfg, stamp="2026-07-28T00:00:00Z")
+
+    # la fiche feu est écrite à l'URL du public_id
+    fiche = tmp_path / "site" / "feux" / "2026-saumos" / "index.html"
+    assert fiche.exists()
+    assert stats["feu"] >= 1
+    # la carte n'est pas encore câblée → différée, restée en file
+    assert stats["carte"] == 0 and stats["differe"] >= 1
+    # les assets statiques sont copiés
+    assert (tmp_path / "site" / "static" / "css" / "vigifeu.css").exists()
+    # la page feu de Saumos est marquée traitée (plus en attente)
+    reste = conn.execute(
+        "SELECT COUNT(*) AS n FROM regen_queue "
+        "WHERE page_type='feu' AND page_ref=? AND processed_at IS NULL",
+        (str(saumos_id),),
+    ).fetchone()["n"]
+    assert reste == 0
+    # une carte reste bien en attente (différée)
+    carte_attente = conn.execute(
+        "SELECT COUNT(*) AS n FROM regen_queue WHERE page_type='carte' AND processed_at IS NULL"
+    ).fetchone()["n"]
+    assert carte_attente >= 1
+
+
 def test_golden_file_saumos(html):
     """Garde-fou §9.2 : la fiche Saumos (archive) est identique au golden approuvé.
 
