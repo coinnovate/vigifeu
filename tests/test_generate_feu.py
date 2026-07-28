@@ -7,7 +7,12 @@ lexique bien assemblées, et **aucun terme interdit** (préfiguration du lint §
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import pytest
+
+GOLDEN = Path(__file__).parent / "fixtures" / "golden" / "feu-2026-saumos.html"
 
 from vigifeu.engine.overpass import build_overpasses
 from vigifeu.engine.pipeline import process_cycle
@@ -95,7 +100,8 @@ def test_html_structure_et_sans_js(html):
     _, page = html
     assert page.startswith("<!doctype html>")
     assert '<html lang="fr">' in page
-    assert "<link rel=\"canonical\" href=\"https://vigifeu.fr/feux/" in page
+    assert "<link rel=\"canonical\" href=\"https://sentifeu.fr/feux/2026-saumos/\">" in page
+    assert "| Sentifeu</title>" in page  # marque publique (codename interne = Vigifeu)
     assert "Chronologie" in page and "Communes concernées" in page
     assert "NASA FIRMS" in page  # attributions présentes
     assert "<script" not in page.lower()  # contenu complet sans JS (P3)
@@ -118,3 +124,19 @@ def test_aucun_horodatage_de_generation(html):
     # toutes les heures affichées portent « UTC » (données) ; pas de fuseau local ni de « généré le »
     assert "généré" not in page.lower()
     assert "generated" not in page.lower()
+
+
+def test_golden_file_saumos(html):
+    """Garde-fou §9.2 : la fiche Saumos (archive) est identique au golden approuvé.
+
+    `page = f(données)` (P1) : la fixture est gelée, la sortie est déterministe.
+    Toute évolution de gabarit se relit sur ce diff. Régénérer (après revue) :
+        VIGIFEU_UPDATE_GOLDEN=1 pytest tests/test_generate_feu.py::test_golden_file_saumos
+    """
+    _, page = html
+    if os.environ.get("VIGIFEU_UPDATE_GOLDEN") == "1":
+        GOLDEN.parent.mkdir(parents=True, exist_ok=True)
+        GOLDEN.write_text(page, encoding="utf-8", newline="\n")
+    assert GOLDEN.exists(), "golden file manquant — le générer avec VIGIFEU_UPDATE_GOLDEN=1"
+    attendu = GOLDEN.read_text(encoding="utf-8")
+    assert page == attendu, "la fiche Saumos diffère du golden (revue de gabarit requise)"

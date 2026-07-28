@@ -123,12 +123,16 @@ _REL_TITRES = {
     "a_moins_de_20km": "À moins de 20 km",
     "direction_vent": "Dans la direction actuelle du vent",
 }
-_REL_ORDRE = list(_REL_TITRES)
+# Paliers proches (emprise, <5 km, direction du vent) affichés d'emblée ; les paliers
+# lointains (<10/<20 km) sont repliés dans un <details> — les liens restent dans le
+# HTML (maillage SEO, crawlables) mais la page reste scannable (décision Lot 4).
+_REL_PRINCIPAUX = ["emprise_dans_commune", "a_moins_de_5km", "direction_vent"]
+_REL_ELOIGNES = ["a_moins_de_10km", "a_moins_de_20km"]
 
 
-def _groupes_communes(relations):
+def _groupes_communes(relations, rel_types):
     groupes = []
-    for rel_type in _REL_ORDRE:
+    for rel_type in rel_types:
         items = []
         for r in relations:
             if r["rel_type"] != rel_type:
@@ -235,8 +239,9 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
 
     return {
         "base_url": gen["base_url"],
+        "marque": gen["marque"],
         "canonical_path": canonical_path,
-        "page_title": f"{nom} — suivi satellite, communes concernées | Vigifeu",
+        "page_title": f"{nom} — suivi satellite, communes concernées | {gen['marque']}",
         "page_description": (synthese[0] if synthese else nom),
         "fil_ariane": [
             {"label": "Accueil", "href": "/"},
@@ -253,7 +258,8 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
         "bandeau_archive": (fr.bandeau_archive(fire["last_acq_at"])
                             if fire["lifecycle"] == "archive" and fire["last_acq_at"] else None),
         "synthese": synthese,
-        "communes_groupes": _groupes_communes(relations),
+        "communes_groupes": _groupes_communes(relations, _REL_PRINCIPAUX),
+        "communes_groupes_eloignes": _groupes_communes(relations, _REL_ELOIGNES),
         "chronologie": _chronologie(conn, config, event_id),
         # Contexte sécheresse en mode dégradé tant que [drought].activated est faux
         # (Spec 03 P6 : l'absence de donnée est une information, pas un trou silencieux).

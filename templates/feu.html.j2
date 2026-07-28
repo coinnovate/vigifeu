@@ -30,11 +30,11 @@
 {% endfor %}
 </section>
 
-{# 3.4 Communes concernées #}
-{% if communes_groupes %}
+{# 3.4 Communes concernées — paliers proches ouverts, paliers lointains repliés #}
+{% if communes_groupes or communes_groupes_eloignes %}
 <section class="communes">
 <h2>Communes concernées</h2>
-{% for groupe in communes_groupes %}
+{% macro groupe_rel(groupe) %}
 <div class="groupe-rel">
 <h3>{{ groupe.titre }}</h3>
 <ul>
@@ -43,7 +43,18 @@
 {% endfor %}
 </ul>
 </div>
+{% endmacro %}
+{% for groupe in communes_groupes %}
+{{ groupe_rel(groupe) }}
 {% endfor %}
+{% if communes_groupes_eloignes %}
+<details class="communes-eloignees">
+<summary>Communes à proximité (10 à 20 km)</summary>
+{% for groupe in communes_groupes_eloignes %}
+{{ groupe_rel(groupe) }}
+{% endfor %}
+</details>
+{% endif %}
 </section>
 {% endif %}
 
