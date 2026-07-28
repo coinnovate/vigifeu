@@ -230,6 +230,8 @@ def cmd_bdiff_import(path: str, replace: bool) -> None:
 def cmd_generer(limit: int | None) -> None:
     from vigifeu.generate.runner import consume, finalize_site, sync_static
 
+    from vigifeu.generate.lint import lint_lexique, no_generation_timestamp
+
     conn, config = _open()
     sync_static(config)
     stamp = datetime.now(UTC).isoformat()
@@ -241,6 +243,12 @@ def cmd_generer(limit: int | None) -> None:
         f"Site : {site['pages']} pages, sitemaps {site['sitemaps']}, {site['redirects']} redirections "
         f"→ {config['generate']['site_dir']}"
     )
+    # Garde-fous Spec 04 §9 (avertissement au build ; l'échec dur est en CI).
+    site_dir = config["generate"]["site_dir"]
+    for v in lint_lexique(site_dir):
+        print(f"  ⚠ terme interdit : {v['terme']} dans {v['file']}", file=sys.stderr)
+    for v in no_generation_timestamp(site_dir):
+        print(f"  ⚠ horodatage de génération : {v['marqueur']} dans {v['file']}", file=sys.stderr)
 
 
 def cmd_contexte() -> None:

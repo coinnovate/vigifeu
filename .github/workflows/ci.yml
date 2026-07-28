@@ -1,5 +1,6 @@
-# CI squelette Lot 0 — s'enrichira des garde-fous Spec 04 §9 au fil des lots
-# (lint lexique, golden file Saumos, JSON-LD, budget perf).
+# CI — pytest couvre les 5 garde-fous Spec 04 §9 (Lot 4) : lint lexique, golden file
+# Saumos, JSON-LD valide, budget perf < 100 ko, aucun horodatage de génération
+# (tests/test_garde_fous_ci.py + tests/test_generate_feu.py::test_golden_file_saumos).
 name: ci
 on: [push, pull_request]
 jobs:
