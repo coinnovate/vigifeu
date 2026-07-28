@@ -11,10 +11,12 @@ les libellés) : Année, Numéro, Code INSEE, Date de première alerte, Surface 
 (m²), Nature/Type de feu. La logique de mapping est isolée dans `_normalize_row` :
 seule cette fonction est à ajuster si le format réel diffère.
 
-Idempotence sans contrainte de schéma : à chaque import, on **remplace** les lignes
-BDIFF des communes présentes dans le fichier (DELETE puis INSERT). Rejouer le même
-fichier — ou ré-importer dept par dept — ne duplique jamais. Les codes INSEE absents
-du référentiel `commune` sont ignorés et comptés (FK activées ; remap succession en v1.1).
+Idempotence par **clé naturelle de feu** (`code_insee + année + date + numéro`), sans
+contrainte de schéma : on n'insère que les feux pas déjà présents. Conséquences :
+rejouer un fichier ne duplique jamais, et **plusieurs fichiers se cumulent** — utile
+car l'export BDIFF est plafonné en taille (il faut souvent le découper). `replace=True`
+efface d'abord tout l'historique BDIFF (repartir d'un export complet). Les codes INSEE
+absents du référentiel `commune` sont ignorés et comptés (FK activées ; remap succession en v1.1).
 """
 
 from __future__ import annotations
@@ -108,10 +110,16 @@ def _read_csv(path: Path) -> Iterator[dict]:
     yield from csv.DictReader(lines, delimiter=delim)
 
 
-def import_bdiff(conn: sqlite3.Connection, source: str | Path) -> dict:
-    """Importe/actualise commune_fire_history depuis un CSV BDIFF (idempotent).
+def _fire_key(r: dict) -> tuple:
+    """Clé naturelle d'un feu BDIFF (dédup inter-fichiers et ré-import)."""
+    return (r["code_insee"], r["annee"], r["date_alerte"], r["source_ref"])
 
-    Retourne {imported, skipped_unknown_commune, communes_touchees}.
+
+def import_bdiff(conn: sqlite3.Connection, source: str | Path, *, replace: bool = False) -> dict:
+    """Importe l'historique BDIFF depuis un CSV (cumulatif, dédup par feu).
+
+    `replace=True` efface d'abord tout l'historique BDIFF. Retourne
+    {imported, duplicates_ignored, skipped_unknown_commune, communes_touchees}.
     """
     path = Path(source)
     if not path.exists():
@@ -129,23 +137,40 @@ def import_bdiff(conn: sqlite3.Connection, source: str | Path) -> dict:
             continue
         rows.append(rec)
 
-    touched = {r["code_insee"] for r in rows}
-    # Idempotence : on remplace les lignes BDIFF des communes présentes dans le fichier.
-    for code in touched:
-        conn.execute(
-            "DELETE FROM commune_fire_history WHERE source_base=? AND code_insee=?",
-            (SOURCE_BASE, code),
-        )
+    if replace:
+        conn.execute("DELETE FROM commune_fire_history WHERE source_base=?", (SOURCE_BASE,))
+        seen: set[tuple] = set()
+    else:
+        seen = {
+            _fire_key(r)
+            for r in conn.execute(
+                "SELECT code_insee, annee, date_alerte, source_ref "
+                "FROM commune_fire_history WHERE source_base=?",
+                (SOURCE_BASE,),
+            )
+        }
+
+    to_insert: list[dict] = []
+    duplicates = 0
+    for r in rows:
+        key = _fire_key(r)
+        if key in seen:
+            duplicates += 1
+            continue
+        seen.add(key)
+        to_insert.append(r)
+
     conn.executemany(
         """INSERT INTO commune_fire_history
              (code_insee, annee, date_alerte, surface_ha, type_feu, source_base, source_ref)
            VALUES (:code_insee, :annee, :date_alerte, :surface_ha, :type_feu,
                    :source_base, :source_ref)""",
-        [{**r, "source_base": SOURCE_BASE} for r in rows],
+        [{**r, "source_base": SOURCE_BASE} for r in to_insert],
     )
     conn.commit()
     return {
-        "imported": len(rows),
+        "imported": len(to_insert),
+        "duplicates_ignored": duplicates,
         "skipped_unknown_commune": skipped,
-        "communes_touchees": len(touched),
+        "communes_touchees": len({r["code_insee"] for r in rows}),
     }

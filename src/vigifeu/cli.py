@@ -15,7 +15,8 @@
   vigifeu invalider ID            — rejette une source fixe candidate
   vigifeu communes-import PATH [--millesime M] [--layer L]
                                   — importe le référentiel commune (GeoPackage/GeoJSON)
-  vigifeu bdiff-import PATH        — importe l'historique des feux BDIFF (CSV)
+  vigifeu bdiff-import PATH [--replace]
+                                  — importe l'historique BDIFF (CSV, cumulatif ; --replace efface d'abord)
   vigifeu contexte                — tire drought/vigieau des communes concernées (flags config)
 """
 
@@ -213,13 +214,14 @@ def cmd_communes_import(path: str, millesime: str | None, layer: str | None) -> 
     print(f"communes importées : {res['imported']} (millésime {res['millesime']})")
 
 
-def cmd_bdiff_import(path: str) -> None:
+def cmd_bdiff_import(path: str, replace: bool) -> None:
     from vigifeu.referentiels.bdiff import import_bdiff
 
     conn, _ = _open()
-    res = import_bdiff(conn, path)
+    res = import_bdiff(conn, path, replace=replace)
     print(
-        f"BDIFF : {res['imported']} feux historiques sur {res['communes_touchees']} communes, "
+        f"BDIFF : {res['imported']} feux importés sur {res['communes_touchees']} communes, "
+        f"{res['duplicates_ignored']} déjà présents, "
         f"{res['skipped_unknown_commune']} ignorés (code INSEE hors référentiel)"
     )
 
@@ -274,7 +276,7 @@ def main() -> None:
         case "communes-import":
             cmd_communes_import(rest[0], _flag(rest, "millesime"), _flag(rest, "layer"))
         case "bdiff-import":
-            cmd_bdiff_import(rest[0])
+            cmd_bdiff_import(rest[0], "--replace" in rest)
         case "contexte":
             cmd_contexte()
         case _:
