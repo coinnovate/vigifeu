@@ -20,15 +20,23 @@ from vigifeu.ingest.drought import fetch_effis_fwi, fetch_meteo_forets
 from vigifeu.ingest.vigieau import fetch_vigieau
 
 
-def concerned_communes(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Communes en relation COURANTE avec un feu actif confirmé (code, dept, centroïde)."""
+def concerned_communes(conn: sqlite3.Connection, config: dict) -> list[sqlite3.Row]:
+    """Communes RÉELLEMENT EXPOSÉES à un feu actif confirmé : emprise + proximité ≤ max_km.
+
+    On borne à la proximité immédiate (config [context].max_km) : un appel HTTP par
+    commune, on ne veut pas des centaines de communes des couronnes lointaines (celles-ci
+    passeront par le balayage France du générateur, Lot 4). Emprise = distance NULL, toujours incluse.
+    """
+    max_km = config["context"]["max_km"]
     return conn.execute(
         "SELECT DISTINCT c.code_insee, c.dept, c.centroid_lat, c.centroid_lon "
         "FROM fe_commune_rel r "
         "JOIN fire_event fe ON fe.id = r.fire_event_id "
         "JOIN commune c ON c.code_insee = r.code_insee "
         "WHERE r.valid_to IS NULL AND fe.lifecycle='actif' "
-        "AND fe.qualification='vegetation_confirme'"
+        "AND fe.qualification='vegetation_confirme' "
+        "AND (r.rel_type='emprise_dans_commune' OR r.distance_km <= ?)",
+        (max_km,),
     ).fetchall()
 
 
@@ -46,7 +54,7 @@ def refresh_commune_context(
     l'override permet aux tests d'armer l'orchestration avec des fetchers mockés.
     Retourne un récapitulatif (communes/depts visés, insertions), même à blanc.
     """
-    communes = concerned_communes(conn)
+    communes = concerned_communes(conn, config)
     depts = sorted({c["dept"] for c in communes if c["dept"]})
     d_on = config["drought"].get("activated", False) if drought_activated is None else drought_activated
     v_on = config["vigieau"].get("activated", False) if vigieau_activated is None else vigieau_activated

@@ -85,6 +85,15 @@ t_recent_h = 24         # vue dans les dernières 24 h ⇒ recent ; au-delà ⇒
 window_min = 20              # fenêtres de passage qui se chevauchent à < 20 min
 radius_m = 375               # pixels à < 375 m (résolution VIIRS)
 
+[context]
+# Spec 02 §2 — drought/vigieau ne sont tirés (un appel HTTP par commune) que pour
+# les communes RÉELLEMENT EXPOSÉES à un feu actif : emprise + proximité immédiate.
+# Les couronnes lointaines (jusqu'à 20 km) relèveront du balayage France quotidien
+# du générateur (Lot 4), pas d'une rafale d'appels par feu. Mesuré en prod : à 5 km,
+# 107 communes vs 714 sur toutes les couronnes. Une commune en emprise (distance NULL)
+# est toujours incluse.
+max_km = 5
+
 [vigieau]
 # Format VÉRIFIÉ LIVE le 28/07/2026 (dépôt MTES-MCT/vigieau-api + réponses réelles) :
 # endpoint /api/zones?commune=&profil= → liste de zones {niveauGravite, arrete:{id,

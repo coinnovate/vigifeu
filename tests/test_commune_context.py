@@ -28,11 +28,11 @@ def _commune(conn, code, dept):
     )
 
 
-def _rel(conn, fire_id, code, *, valid_to=None):
+def _rel(conn, fire_id, code, *, valid_to=None, rel_type="emprise_dans_commune", distance_km=None):
     conn.execute(
-        "INSERT INTO fe_commune_rel (fire_event_id, code_insee, rel_type, valid_from, valid_to) "
-        "VALUES (?, ?, 'emprise_dans_commune', '2026-07-22T12:00:00Z', ?)",
-        (fire_id, code, valid_to),
+        "INSERT INTO fe_commune_rel (fire_event_id, code_insee, rel_type, distance_km, valid_from, valid_to) "
+        "VALUES (?, ?, ?, ?, '2026-07-22T12:00:00Z', ?)",
+        (fire_id, code, rel_type, distance_km, valid_to),
     )
 
 
@@ -43,18 +43,21 @@ def _scenario(conn):
     _commune(conn, "33002", "33")
     _commune(conn, "40001", "40")
     _commune(conn, "33099", "33")
-    _rel(conn, 1, "33001")                # concernée (relation courante)
-    _rel(conn, 1, "33002")                # concernée
-    _rel(conn, 1, "40001")                # concernée (autre dept)
+    _commune(conn, "33500", "33")
+    _rel(conn, 1, "33001")                # emprise → concernée
+    _rel(conn, 1, "33002", rel_type="a_moins_de_5km", distance_km=3.0)   # proche → concernée
+    _rel(conn, 1, "40001")                # emprise, autre dept → concernée
+    _rel(conn, 1, "33500", rel_type="a_moins_de_20km", distance_km=17.0)  # lointaine → EXCLUE
     _rel(conn, 1, "33099", valid_to="2026-07-23T00:00:00Z")  # relation fermée → hors
     _rel(conn, 2, "33001")                # feu non actif → n'ajoute rien
 
 
 def test_concerned_communes(db):
-    conn, _ = db
+    """Emprise + proximité ≤ max_km ; les couronnes lointaines (20 km) sont exclues."""
+    conn, config = db
     _scenario(conn)
-    codes = {c["code_insee"] for c in concerned_communes(conn)}
-    assert codes == {"33001", "33002", "40001"}
+    codes = {c["code_insee"] for c in concerned_communes(conn, config)}
+    assert codes == {"33001", "33002", "40001"}  # 33500 (17 km) exclue
 
 
 def test_flag_off_marche_a_blanc(db, monkeypatch):
@@ -63,7 +66,9 @@ def test_flag_off_marche_a_blanc(db, monkeypatch):
     calls = []
     monkeypatch.setattr(commune_context, "fetch_vigieau",
                         lambda *a, **k: calls.append("v") or {"inserted": 1})
-    res = refresh_commune_context(conn, config, valid_date="2026-07-22")
+    # overrides explicites : on teste la marche à blanc indépendamment des flags de config
+    res = refresh_commune_context(conn, config, valid_date="2026-07-22",
+                                  drought_activated=False, vigieau_activated=False)
     assert res["drought_activated"] is False and res["vigieau_activated"] is False
     assert res["communes"] == 3 and res["depts"] == 2
     assert res["vigieau_inserted"] == 0
