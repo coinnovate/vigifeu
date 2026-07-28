@@ -167,6 +167,23 @@ def bandeau_archive(derniere_detection: str) -> str:
     return f"Feu archivé — dernière détection le {date_fr(derniere_detection)}"
 
 
+def phrase_periode_suivi(first_acq: str, last_acq: str) -> str:
+    """Période de suivi d'un feu (synthèse d'en-tête / mode archive, Spec 03 §3.2/§3.11)."""
+    return f"Feu suivi du {date_fr(first_acq)} au {date_fr(last_acq)}"
+
+
+_BADGE_CONFIANCE = {
+    "confirme": "Détection confirmée",
+    "probable": "Détection probable",
+    "signalement": "Signalement",
+}
+
+
+def badge_confiance(niveau: str) -> str:
+    """Libellé du badge de niveau de confiance (Spec 03 §3.1, cadrage §5.7)."""
+    return _BADGE_CONFIANCE[niveau]
+
+
 def libelle_zone_cellule(state: str, *, t_recent_h: int = 24) -> str:
     """Libellé d'une cellule selon son état d'ancienneté (Spec 03 §2.1)."""
     if state == "front_actif":

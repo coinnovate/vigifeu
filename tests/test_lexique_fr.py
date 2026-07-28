@@ -89,6 +89,15 @@ def test_libelle_cycle_de_vie_archive_delegue():
     assert fr.bandeau_archive("2026-07-26T00:00:00Z") == "Feu archivé — dernière détection le 26/07/2026"
 
 
+def test_periode_suivi_et_badge_confiance():
+    assert (
+        fr.phrase_periode_suivi("2026-07-22T11:55:00Z", "2026-07-26T13:40:00Z")
+        == "Feu suivi du 22/07/2026 au 26/07/2026"
+    )
+    assert fr.badge_confiance("confirme") == "Détection confirmée"
+    assert fr.badge_confiance("probable") == "Détection probable"
+
+
 def test_badge_et_zones():
     assert fr.badge_cycle_de_vie("actif") == "Actif"
     assert fr.badge_cycle_de_vie("archive") == "Archivé"

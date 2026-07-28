@@ -1,0 +1,94 @@
+{% extends "base.html.j2" %}
+{#
+  Fiche feu (Spec 03 §3). Toutes les phrases métier viennent du lexique (via feu.py) ;
+  ce gabarit n'apporte que la structure et les libellés de sections. Complet sans JS
+  (P3) : la carte interactive (§3.3) s'ajoutera en enrichissement (étape C).
+#}
+{% block content %}
+{% if bandeau_archive %}
+<div class="bandeau" role="note">{{ bandeau_archive }}</div>
+{% endif %}
+
+<article class="fiche-feu">
+
+<header>
+<h1>{{ nom }}</h1>
+<p class="badges">
+<span class="badge {{ badge_cycle.classe }}">{{ badge_cycle.label }}</span>
+{% if badge_confiance %}<span class="badge">{{ badge_confiance }}</span>{% endif %}
+</p>
+<p class="dates">
+{% if first_acq %}Première détection : {{ first_acq }}. {% endif %}
+{% if last_acq %}Dernière observation : {{ last_acq }}.{% endif %}
+</p>
+</header>
+
+{# 3.2 Synthèse factuelle — le paragraphe citable (presse, moteurs génératifs) #}
+<section class="synthese" aria-label="Synthèse factuelle">
+{% for phrase in synthese %}
+<p>{{ phrase }}</p>
+{% endfor %}
+</section>
+
+{# 3.4 Communes concernées #}
+{% if communes_groupes %}
+<section class="communes">
+<h2>Communes concernées</h2>
+{% for groupe in communes_groupes %}
+<div class="groupe-rel">
+<h3>{{ groupe.titre }}</h3>
+<ul>
+{% for c in groupe.communes %}
+<li><a href="{{ c.href }}">{{ c.nom }}</a>{% if c.interval %} — {{ c.interval }}{% endif %}</li>
+{% endfor %}
+</ul>
+</div>
+{% endfor %}
+</section>
+{% endif %}
+
+{# 3.5 Chronologie + 3.6 intensité par passage — antichronologique, jour/nuit distingués #}
+{% if chronologie %}
+<section class="chronologie">
+<h2>Chronologie des passages</h2>
+<table>
+<thead><tr><th>Horodatage (donnée)</th><th>Passage</th><th>Hotspots</th><th>Intensité radiative</th></tr></thead>
+<tbody>
+{% for l in chronologie %}
+<tr><td>{{ l.at }}</td><td>{{ l.type }}</td><td>{{ l.n_hotspots }}</td>
+<td>{% if l.frp %}{{ l.frp }} MW{% else %}—{% endif %}</td></tr>
+{% endfor %}
+</tbody>
+</table>
+<p class="note">Les passages de nuit et de jour ne sont pas comparables entre eux (sensibilité du capteur).</p>
+</section>
+{% endif %}
+
+{# 3.7 Météo #}
+{% if meteo_obs %}
+<section class="meteo">
+<h2>Météo</h2>
+<p>{{ meteo_obs }}.</p>
+</section>
+{% endif %}
+
+{# 3.8 Contexte sécheresse — mode dégradé tant que la source n'est pas armée (P6) #}
+<section class="secheresse">
+<h2>Contexte sécheresse</h2>
+{% if secheresse_indispo %}
+<p class="indispo">Contexte sécheresse momentanément indisponible (source en cours d'intégration).</p>
+{% endif %}
+</section>
+
+{# 3.9 Données brutes — second niveau, replié #}
+<section class="brut">
+<h2>Données brutes</h2>
+<details>
+<summary>Détections et export</summary>
+<p>{{ brut.n_hotspots }} hotspots enregistrés · {{ brut.n_versions }} versions du feu.</p>
+<p><a href="{{ brut.geojson_href }}">Télécharger le GeoJSON du feu</a></p>
+</details>
+</section>
+
+</article>
+{% endblock %}

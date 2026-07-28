@@ -1,0 +1,26 @@
+{#
+  Pied de page partagé (Spec 04 §2) : bloc latence (§2.6), encadré limites (§3.10),
+  attributions obligatoires (§2.7). Un composant unique réutilisé par toutes les fiches.
+#}
+<footer class="pied">
+
+<p class="latence">{{ latence_texte }}</p>
+
+<aside class="limites">
+<h2>Limites</h2>
+<p>Vigifeu est un outil de veille satellitaire, <strong>pas un système d'alerte</strong>.
+En cas de risque, référez-vous aux sources officielles (préfecture, SDIS, mairie).</p>
+<p><a href="/methodologie/">Méthodologie et latence des détections</a> ·
+<a href="/cgu/">Conditions d'utilisation</a></p>
+</aside>
+
+<section class="attributions" aria-label="Sources et attributions">
+<h2>Sources</h2>
+<ul>
+{% for ligne in attributions %}
+<li>{{ ligne }}</li>
+{% endfor %}
+</ul>
+</section>
+
+</footer>

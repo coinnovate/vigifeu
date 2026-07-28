@@ -1,0 +1,68 @@
+/* Vigifeu — feuille de style unique, sobre, lisible en mobilité (Spec 04 §8).
+   Contrastes AA, une seule colonne fluide, budget serré (Spec 04 §5). */
+
+:root {
+  --encre: #1a1a1a;
+  --papier: #ffffff;
+  --gris: #5a5a5a;
+  --trait: #d8d8d8;
+  --fond-doux: #f4f4f2;
+  --front: #c0392b;      /* front_actif — rouge, doublé par la forme/intensité */
+  --recent: #e67e22;     /* recent — orange */
+  --ancien: #8a8a8a;     /* plus_detecte — gris */
+  --lien: #0b5a9c;
+  --largeur: 44rem;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 1rem/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--encre);
+  background: var(--papier);
+}
+
+main, header.site, footer.pied { max-width: var(--largeur); margin: 0 auto; padding: 0 1rem; }
+
+a { color: var(--lien); }
+a:focus, .skip:focus { outline: 3px solid var(--lien); outline-offset: 2px; }
+
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: 1rem; top: 1rem; background: var(--papier); padding: .5rem 1rem; z-index: 10; }
+
+.fil ol { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; padding: .6rem 0; margin: 0; font-size: .85rem; color: var(--gris); }
+.fil li + li::before { content: "›"; margin-right: .4rem; color: var(--trait); }
+
+h1 { font-size: 1.7rem; line-height: 1.2; margin: .4rem 0; }
+h2 { font-size: 1.15rem; margin: 1.6rem 0 .5rem; border-bottom: 1px solid var(--trait); padding-bottom: .2rem; }
+
+.badges { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
+.badge { display: inline-block; padding: .12rem .6rem; border-radius: 1rem; font-size: .8rem; font-weight: 600; background: var(--fond-doux); border: 1px solid var(--trait); }
+.badge.actif { background: #fdecea; border-color: var(--front); color: var(--front); }
+.badge.plus_detecte, .badge.archive { background: #eee; color: var(--gris); }
+
+.bandeau { background: var(--fond-doux); border-left: 4px solid var(--ancien); padding: .7rem 1rem; margin: 1rem 0; }
+
+.synthese p { margin: .5rem 0; }
+.synthese { font-size: 1.05rem; }
+
+table { border-collapse: collapse; width: 100%; font-size: .9rem; margin: .5rem 0; display: block; overflow-x: auto; }
+th, td { text-align: left; padding: .35rem .6rem; border-bottom: 1px solid var(--trait); white-space: nowrap; }
+
+.communes ul, .attributions ul { padding-left: 1.1rem; }
+.groupe-rel { margin: .6rem 0; }
+.groupe-rel h3 { font-size: 1rem; margin: .3rem 0; }
+
+.indispo { color: var(--gris); font-style: italic; }
+
+details { margin: .6rem 0; }
+summary { cursor: pointer; font-weight: 600; }
+
+footer.pied { margin-top: 2.5rem; border-top: 2px solid var(--trait); padding-top: 1rem; font-size: .85rem; color: var(--gris); }
+footer.pied h2 { font-size: 1rem; border: 0; }
+.latence { background: var(--fond-doux); padding: .6rem .8rem; border-radius: .3rem; }
+
+@media (prefers-color-scheme: dark) {
+  :root { --encre: #eaeaea; --papier: #16181a; --gris: #a0a0a0; --trait: #333; --fond-doux: #202325; --lien: #6fb3e8; }
+}

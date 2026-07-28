@@ -129,6 +129,18 @@ retry_wait_max_s = 60
 provider_effis = "effis"
 provider_meteo_forets = "meteo-france"
 
+[generate]
+# Générateur statique (Spec 04). Le site est un dossier de HTML servi par Nginx/CDN.
+site_dir = "data/site"                 # racine de sortie (arborescence /feux, /communes…)
+templates_dir = "templates"            # gabarits Jinja2 (repo)
+static_dir = "static"                  # css, js minimal, pmtiles (copiés tels quels)
+base_url = "https://vigifeu.fr"        # origine pour canonical/sitemaps (placeholder v1)
+referentiel_millesime = "2026"         # millésime Admin Express affiché en attribution (Spec 03 §2.7)
+# Fond de carte : MapTiler raster free-tier pour la bêta (repli béni plan §3), PMTiles
+# France auto-hébergé avant le lancement public (Lot 5). La clé est un secret d'env
+# (VIGIFEU_MAPTILER_KEY), jamais dans ce fichier.
+carte_style = "maptiler-raster"
+
 [lexique]
 # Barèmes de traduction versionnés (Spec 03 §2.5 / Spec 01 §3.5) — traduisent une
 # valeur brute d'indice en classe verbale, le chiffre restant en second niveau (P1).

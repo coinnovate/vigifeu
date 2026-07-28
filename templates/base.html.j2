@@ -1,0 +1,32 @@
+{#
+  Gabarit de base — squelette commun à toutes les pages (Spec 04 §2, §5).
+  Contenu complet sans JavaScript (P3) ; le JS n'ajoute que carte et durées relatives.
+  Aucune heure de génération ici (Spec 04 §9.5) : seuls les <time> de la donnée.
+#}<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ page_title }}{% endblock %}</title>
+<meta name="description" content="{% block description %}{{ page_description }}{% endblock %}">
+<link rel="canonical" href="{{ base_url }}{{ canonical_path }}">
+<link rel="stylesheet" href="/static/css/vigifeu.css">
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+<a class="skip" href="#contenu">Aller au contenu</a>
+<header class="site">
+<nav class="fil" aria-label="Fil d'Ariane">
+<ol>
+{% for miette in fil_ariane %}
+<li>{% if miette.href %}<a href="{{ miette.href }}">{{ miette.label }}</a>{% else %}<span aria-current="page">{{ miette.label }}</span>{% endif %}</li>
+{% endfor %}
+</ol>
+</nav>
+</header>
+<main id="contenu">
+{% block content %}{% endblock %}
+</main>
+{% include "_footer.html.j2" %}
+</body>
+</html>

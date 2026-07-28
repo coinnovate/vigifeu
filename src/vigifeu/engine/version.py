@@ -40,29 +40,38 @@ def _passages(conn: sqlite3.Connection, event_id: int) -> list[sqlite3.Row]:
     ).fetchall()
 
 
-def _passage_frp_dedup(conn: sqlite3.Connection, event_id: int, passage_id: int,
-                       config: dict) -> float:
-    """Somme des FRP d'un passage, dédupliquée inter-satellites (§6)."""
+def _passage_dedup(conn: sqlite3.Connection, event_id: int, passage_id: int,
+                   config: dict) -> tuple[float, int]:
+    """FRP total et nombre de hotspots d'un passage, dédupliqués inter-satellites (§6)."""
     hs = conn.execute(
         "SELECT id, source_id, lat, lon, acq_at, frp_mw FROM hotspot_raw "
         "WHERE fire_event_id=? AND overpass_id=?",
         (event_id, passage_id),
     ).fetchall()
     if not hs:
-        return 0.0
+        return 0.0, 0
     groups = dedup.dedup_groups(hs, config)
     reps = dedup.representative_ids(hs, groups)
-    return sum(h["frp_mw"] for h in hs if h["id"] in reps and h["frp_mw"] is not None)
+    frp = sum(h["frp_mw"] for h in hs if h["id"] in reps and h["frp_mw"] is not None)
+    return frp, len(reps)
+
+
+def _passage_frp_dedup(conn: sqlite3.Connection, event_id: int, passage_id: int,
+                       config: dict) -> float:
+    """Somme des FRP d'un passage, dédupliquée inter-satellites (§6)."""
+    return _passage_dedup(conn, event_id, passage_id, config)[0]
 
 
 def intensity_series(conn: sqlite3.Connection, event_id: int, config: dict) -> list[dict]:
-    """Série d'intensité par passage {window_start, day_night, frp_total}."""
+    """Série par passage {at (window_start), dn (day_night), frp, n_dedup} — §3.5/§3.6."""
     series = []
     for p in _passages(conn, event_id):
+        frp, n = _passage_dedup(conn, event_id, p["id"], config)
         series.append({
             "at": p["window_start"],
             "dn": p["day_night"],
-            "frp": round(_passage_frp_dedup(conn, event_id, p["id"], config)),
+            "frp": round(frp),
+            "n_dedup": n,
         })
     return series
 
