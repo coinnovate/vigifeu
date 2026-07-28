@@ -26,6 +26,7 @@ from vigifeu.engine.cluster import apply_lifecycle, cluster_new_hotspots
 from vigifeu.engine.fixed_source import mark_fixed_sources, promote_candidates
 from vigifeu.engine.overpass import rebuild_overpasses
 from vigifeu.engine.qualify import qualify_events
+from vigifeu.engine.relations import compute_commune_relations
 from vigifeu.engine.version import create_version
 
 _CONFIRME = "vegetation_confirme"
@@ -55,6 +56,7 @@ def process_cycle(conn: sqlite3.Connection, config: dict, *, stamp: str | None =
     clock = clock or _data_clock(conn)
 
     versioned: list[int] = []
+    relations_opened = relations_closed = 0
     for eid in cl["touched"]:
         fe = conn.execute(
             "SELECT qualification, lifecycle FROM fire_event WHERE id=?", (eid,)
@@ -71,8 +73,13 @@ def process_cycle(conn: sqlite3.Connection, config: dict, *, stamp: str | None =
         ).fetchone() is not None
         if fe["qualification"] == _CONFIRME or (eid in qual["changed"] and has_version):
             rebuild_cells(conn, config, eid, clock=clock)
-            create_version(conn, config, eid, stamp=stamp,
-                           trigger_run_id=trigger_run_id, reprise=(eid in cl["reprises"]))
+            vid = create_version(conn, config, eid, stamp=stamp,
+                                 trigger_run_id=trigger_run_id, reprise=(eid in cl["reprises"]))
+            # Étape 8 (§7) : relations emprise/a_moins_de_X sur l'union des cellules,
+            # historisées. No-op si aucune commune chargée (garde le Lot 2 vert).
+            rel = compute_commune_relations(conn, config, eid, version_id=vid, stamp=stamp)
+            relations_opened += rel["opened"]
+            relations_closed += rel["closed"]
             versioned.append(eid)
 
     life = apply_lifecycle(conn, config, clock=clock)
@@ -86,6 +93,8 @@ def process_cycle(conn: sqlite3.Connection, config: dict, *, stamp: str | None =
         "requalified": len(qual["changed"]),
         "promoted": len(promoted),
         "versioned": len(versioned),
+        "relations_opened": relations_opened,
+        "relations_closed": relations_closed,
         "lifecycle": life,
     }
 

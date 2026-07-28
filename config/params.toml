@@ -50,6 +50,20 @@ f_mobile_mw = 20             # FRP max min sur la voie « mouvement » (calage :
                              # feux ; à revoir avec la fixture France + vérité terrain, §5.3)
 n_franc = 8                 # feu franc dès le 1er passage (publiable sans mouvement)
 
+[relations]
+# Spec 02 §7 — relations feu ↔ commune (étape 8 du cycle). Calculées sur l'UNION
+# DES CELLULES du feu (fire_cell_state, grille cells.grid_m), PAS le hull convexe :
+# le hull d'un méga-feu est convexe et ponte les zones non brûlées (le bassin
+# d'Arcachon pour Saumos), surestimant l'emprise (Andernos ressortirait « sur l'eau »).
+# L'union des cellules épouse la forme réelle. Le hull reste la géométrie d'affichage
+# et la base de area_ha_estimee. Décision de cadrage Lot 3 (dévie du texte des specs).
+paliers_km = [5, 10, 20]     # a_moins_de_5km / 10km / 20km (distance union cellules → limite communale)
+emprise_min_ha = 1.0         # intersection minimale pour retenir emprise_dans_commune (filtre les slivers numériques)
+# direction_vent (§7) — fait composé (géométrie + vent), recalculé à chaque weather_obs.
+a_vent_deg = 30              # demi-angle du secteur autour de la direction VERS LAQUELLE le vent souffle
+d_vent_km = 15               # portée du secteur
+n_hysteresis = 3             # fermeture après N mesures consécutives hors secteur (anti-clignotement)
+
 [version]
 # Spec 02 §6 — mesures factuelles par version. area_ha = aire de l'enveloppe ×
 # facteur de remplissage (un feu ne brûle pas tout son enveloppe convexe) ;
