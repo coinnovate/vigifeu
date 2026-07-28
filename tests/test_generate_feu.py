@@ -278,6 +278,42 @@ def test_carte_config_isole_la_cle(db, tmp_path, monkeypatch):
     assert '""' in contenu2
 
 
+def test_finalize_site_seo_geo(saumos_archive, tmp_path):
+    import copy
+
+    from vigifeu.generate.runner import finalize_site
+
+    conn, config, _ = saumos_archive
+    cfg = copy.deepcopy(config)
+    cfg["generate"]["site_dir"] = str(tmp_path / "s")
+    finalize_site(conn, cfg)
+    site = tmp_path / "s"
+
+    # pages éditoriales
+    meth = (site / "methodologie" / "index.html").read_text(encoding="utf-8")
+    assert "FAQPage" in meth and "Définitions des libellés" in meth
+    assert (site / "cgu" / "index.html").exists()
+    assert (site / "mentions-legales" / "index.html").exists()
+    assert (site / "404.html").exists()
+
+    # sitemaps segmentés + index
+    assert "<sitemapindex" in (site / "sitemap.xml").read_text(encoding="utf-8")
+    assert "/feux/2026-saumos/" in (site / "sitemap-feux.xml").read_text(encoding="utf-8")
+    assert "/communes/33503-saumos/" in (site / "sitemap-communes.xml").read_text(encoding="utf-8")
+
+    # robots ouvre les crawlers IA + pointe le sitemap
+    robots = (site / "robots.txt").read_text(encoding="utf-8")
+    assert "ClaudeBot" in robots and "GPTBot" in robots and "Sitemap:" in robots
+
+    # llms.txt : sémantique + citation
+    llms = (site / "llms.txt").read_text(encoding="utf-8")
+    assert "plus détecté" in llms and "date d'observation" in llms
+
+    # flux Atom valide avec l'entrée Saumos
+    atom = (site / "feux.xml").read_text(encoding="utf-8")
+    assert atom.startswith("<?xml") and "<feed" in atom and "2026-saumos" in atom
+
+
 def test_runner_consomme_regen_queue(saumos_archive, tmp_path):
     """Le runner écrit la fiche feu, marque la file, et diffère commune/carte (étape C)."""
     import copy

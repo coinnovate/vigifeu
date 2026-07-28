@@ -73,6 +73,19 @@ def commune_place(base_url: str, *, nom: str, url_path: str, dept: str | None,
     return place
 
 
+def faq_page(base_url: str, url_path: str, qa: list[tuple[str, str]]) -> dict:
+    """FAQPage — définitions des libellés, exploitable par moteurs classiques et génératifs (§6)."""
+    return {
+        "@type": "FAQPage",
+        "@id": f"{base_url}{url_path}#faq",
+        "mainEntity": [
+            {"@type": "Question", "name": q,
+             "acceptedAnswer": {"@type": "Answer", "text": a}}
+            for q, a in qa
+        ],
+    }
+
+
 def render_graph(*nodes: dict) -> str:
     """Sérialise un @graph JSON-LD, échappé pour insertion sûre dans <script>."""
     graph = {"@context": "https://schema.org", "@graph": [n for n in nodes if n]}

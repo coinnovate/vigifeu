@@ -25,7 +25,15 @@ from vigifeu.generate.commune import load_commune_context, render_commune
 from vigifeu.generate.feu import load_fire_context, render_feu
 from vigifeu.generate.geojson import feu_geojson, national_geojson
 from vigifeu.generate.og import write_og_images
+from vigifeu.generate.pages import build_static_pages
 from vigifeu.generate.publish import ensure_public_id
+from vigifeu.generate.sitemaps import (
+    build_atom,
+    build_redirects,
+    build_sitemaps,
+    write_llms,
+    write_robots,
+)
 from vigifeu.generate.templating import make_env
 from vigifeu.generate.writer import page_path, write_atomic
 
@@ -77,6 +85,21 @@ def sync_static(config: dict) -> None:
         shutil.copytree(src, site / "static", dirs_exist_ok=True)
     write_carte_config(config)
     write_og_images(config)
+
+
+def finalize_site(conn: sqlite3.Connection, config: dict, env: Environment | None = None) -> dict:
+    """Artefacts « site-level » (Spec 04 §3, passe nocturne) : pages éditoriales, sitemaps,
+    robots, llms.txt, flux Atom, redirections 301. Régénérés en fin de build."""
+    env = env or make_env(config["generate"]["templates_dir"])
+    stats = {
+        "pages": build_static_pages(conn, config, env),
+        "sitemaps": build_sitemaps(conn, config),
+        "redirects": build_redirects(conn, config),
+    }
+    write_robots(config)
+    write_llms(config)
+    build_atom(conn, config)
+    return stats
 
 
 def write_carte_config(config: dict) -> Path:

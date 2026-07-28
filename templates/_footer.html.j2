@@ -14,6 +14,7 @@ En cas de risque, référez-vous aux sources officielles (préfecture, SDIS, mai
 <a href="/cgu/">Conditions d'utilisation</a></p>
 </aside>
 
+{% if attributions %}
 <section class="attributions" aria-label="Sources et attributions">
 <h2>Sources</h2>
 <ul>
@@ -22,6 +23,7 @@ En cas de risque, référez-vous aux sources officielles (préfecture, SDIS, mai
 {% endfor %}
 </ul>
 </section>
+{% endif %}
 
 <p class="marque"><a href="/">{{ marque }}</a> — veille satellitaire des incendies de végétation.</p>
 

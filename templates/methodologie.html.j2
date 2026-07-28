@@ -1,0 +1,41 @@
+{% extends "base.html.j2" %}
+{% block content %}
+<article class="page methodologie">
+<h1>Méthodologie</h1>
+
+<section>
+<h2>Latence des détections</h2>
+<p>Les détections proviennent des satellites défilants VIIRS (NASA FIRMS). Elles
+parviennent avec un <strong>délai de traitement de 1 à 3 h</strong> après le passage du
+satellite ; un départ de feu peut précéder de plusieurs heures sa première détection.
+Les horodatages affichés sont ceux de la <strong>donnée</strong>, en UTC.</p>
+</section>
+
+<section>
+<h2>Sources</h2>
+<ul>
+<li>Détections d'incendies : NASA FIRMS / LANCE / ESDIS (VIIRS Suomi-NPP, NOAA-20, NOAA-21).</li>
+<li>Limites administratives : IGN Admin Express.</li>
+<li>Météo : Open-Meteo.</li>
+<li>Historique des incendies : BDIFF (ministère de l'Agriculture / IGN).</li>
+<li>Restrictions d'eau : VigiEau (services de l'État).</li>
+<li>Danger météorologique : Copernicus / EFFIS et Météo des forêts (Météo-France).</li>
+</ul>
+</section>
+
+<section>
+<h2>Définitions des libellés</h2>
+{% for q, a in faq %}
+<h3>{{ q }}</h3>
+<p>{{ a }}</p>
+{% endfor %}
+</section>
+
+<section>
+<h2>Limites</h2>
+<p>Sentifeu est un outil de veille satellitaire, <strong>pas un système d'alerte</strong>.
+Il ne produit ni carte de risque prospectif, ni délai projeté, ni conseil opérationnel.
+En cas de risque, seules les autorités (préfecture, SDIS, mairie) font foi.</p>
+</section>
+</article>
+{% endblock %}

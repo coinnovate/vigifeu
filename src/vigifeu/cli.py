@@ -228,15 +228,17 @@ def cmd_bdiff_import(path: str, replace: bool) -> None:
 
 
 def cmd_generer(limit: int | None) -> None:
-    from vigifeu.generate.runner import consume, sync_static
+    from vigifeu.generate.runner import consume, finalize_site, sync_static
 
     conn, config = _open()
     sync_static(config)
     stamp = datetime.now(UTC).isoformat()
     stats = consume(conn, config, stamp=stamp, limit=limit)
+    site = finalize_site(conn, config)
     print(
         f"généré : {stats['feu']} feux, {stats['commune']} communes, {stats['carte']} carte "
-        f"— {stats['differe']} différées, {stats['erreurs']} erreurs "
+        f"— {stats['differe']} différées, {stats['erreurs']} erreurs. "
+        f"Site : {site['pages']} pages, sitemaps {site['sitemaps']}, {site['redirects']} redirections "
         f"→ {config['generate']['site_dir']}"
     )
 

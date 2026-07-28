@@ -1,0 +1,25 @@
+{% extends "base.html.j2" %}
+{% block content %}
+<article class="page cgu">
+<h1>Conditions d'utilisation</h1>
+<section>
+<h2>Nature du service</h2>
+<p>{{ marque }} est un outil de <strong>veille</strong> des incendies de végétation à
+partir de données satellitaires publiques. Il ne constitue <strong>pas un système
+d'alerte</strong> et n'a pas vocation à se substituer aux dispositifs officiels.</p>
+</section>
+<section>
+<h2>Absence de garantie opérationnelle</h2>
+<p>Les détections peuvent être retardées, incomplètes ou absentes (nébulosité, bord de
+fauchée, panne de source). L'absence de détection ne signifie pas l'absence de feu ni
+l'absence de risque. En cas de danger, référez-vous aux autorités compétentes
+(préfecture, SDIS, mairie) et aux numéros d'urgence.</p>
+</section>
+<section>
+<h2>Sources et citation</h2>
+<p>Les sources sont créditées sur chaque page et détaillées dans la
+<a href="/methodologie/">méthodologie</a>. La réutilisation des faits publiés est
+encouragée en citant la date d'observation et le lien de la page.</p>
+</section>
+</article>
+{% endblock %}
