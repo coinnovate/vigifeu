@@ -86,10 +86,11 @@ window_min = 20              # fenêtres de passage qui se chevauchent à < 20 m
 radius_m = 375               # pixels à < 375 m (résolution VIIRS)
 
 [vigieau]
-# ACTIVATION LIVE derrière flag (cadrage Lot 3) : le format d'API VigiEau n'est pas
-# encore vérifié (hypothèse documentée, lot1). L'orchestration par commune est câblée
-# et testée (mocks) ; passer à true après la passe de vérification contre l'API réelle.
-activated = false
+# Format VÉRIFIÉ LIVE le 28/07/2026 (dépôt MTES-MCT/vigieau-api + réponses réelles) :
+# endpoint /api/zones?commune=&profil= → liste de zones {niveauGravite, arrete:{id,
+# dateDebutValidite, dateFinValidite}}. niveauGravite observé : vigilance/alerte
+# (barème _SEVERITE conforme). Fetcher ARMÉ.
+activated = true
 # API publique VigiEau (restrictions d'eau, catégorie declaree — Spec 01 §3.6).
 # HYPOTHÈSE DE FORMAT (à vérifier contre l'API réelle) : GET {base_url}/zones
 # ?commune={code_insee}&profil=particulier renvoie une liste de zones portant
