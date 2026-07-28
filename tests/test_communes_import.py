@@ -13,7 +13,13 @@ from shapely import wkb as shapely_wkb
 from shapely.geometry import Polygon
 from shapely.wkt import loads as wkt_loads
 
-from vigifeu.referentiels.communes import _decode_gpb, import_communes, slugify
+from vigifeu.referentiels.communes import (
+    _choose_layer,
+    _decode_gpb,
+    _normalize,
+    import_communes,
+    slugify,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "communes" / "gironde-ouest.geojson"
 
@@ -62,6 +68,49 @@ def test_import_idempotent(db):
         "SELECT referentiel_millesime FROM commune WHERE code_insee='33503'"
     ).fetchone()["referentiel_millesime"]
     assert m == "v2"
+
+
+def test_normalize_admin_express_4_0():
+    """Schéma Admin Express 4-0 (thème administratif) : noms de colonnes français."""
+    raw = {
+        "code_insee": "33503",
+        "nom_officiel": "Saumos",
+        "code_insee_du_departement": "33",
+        "code_insee_de_la_region": "75",
+        "codes_siren_des_epci": "243301389",
+        "population": 550,
+        "statut": "Commune simple",  # champ ignoré
+    }
+    got = _normalize(raw)
+    assert got == {
+        "code_insee": "33503",
+        "nom": "Saumos",
+        "dept": "33",
+        "region": "75",
+        "epci_code": "243301389",
+        "population": 550,
+    }
+
+
+def _cols(*pairs):
+    return [{"table_name": t, "column_name": c} for t, c in pairs]
+
+
+def test_choose_layer_prend_commune_polygone():
+    """Auto-sélection : la couche `commune` (polygone), jamais chef_lieu_de_commune."""
+    # ordre réel du GeoPackage Admin Express 4-0 : chef_lieu_de_commune AVANT commune
+    cols = _cols(
+        ("chef_lieu_de_commune", "geometrie"),
+        ("commune_associee_ou_deleguee", "geometrie"),
+        ("commune", "geometrie"),
+        ("departement", "geometrie"),
+    )
+    assert _choose_layer(cols, None) == ("commune", "geometrie")
+
+
+def test_choose_layer_explicite():
+    cols = _cols(("commune", "geom"), ("departement", "geom"))
+    assert _choose_layer(cols, "departement") == ("departement", "geom")
 
 
 def test_decode_gpb_roundtrip():

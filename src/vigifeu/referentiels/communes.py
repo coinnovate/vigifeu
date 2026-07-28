@@ -52,17 +52,23 @@ def _dept_from_code(code: str) -> str:
 
 
 def _normalize(raw: dict) -> dict:
-    code = _pick(raw, "code", "INSEE_COM", "insee_com", "code_insee")
+    # Multi-schémas : geo.api.gouv.fr (code, nom, codeDepartement…), Admin Express
+    # ≤3-x (INSEE_COM, NOM, INSEE_DEP…) et Admin Express 4-0 / thème administratif
+    # (code_insee, nom_officiel, code_insee_du_departement…).
+    code = _pick(raw, "code", "code_insee", "INSEE_COM", "insee_com",
+                 "code_insee_de_la_commune")
     if not code:
         raise CommuneImportError(f"enregistrement sans code INSEE: {raw!r}")
-    dept = _pick(raw, "codeDepartement", "INSEE_DEP", "insee_dep") or _dept_from_code(code)
+    dept = _pick(raw, "codeDepartement", "code_insee_du_departement",
+                 "INSEE_DEP", "insee_dep") or _dept_from_code(code)
     pop = _pick(raw, "population", "POPULATION")
     return {
         "code_insee": code,
-        "nom": _pick(raw, "nom", "NOM", "NOM_COM", "nom_com") or code,
+        "nom": _pick(raw, "nom", "nom_officiel", "NOM", "NOM_COM", "nom_com") or code,
         "dept": dept,
-        "region": _pick(raw, "codeRegion", "INSEE_REG", "insee_reg"),
-        "epci_code": _pick(raw, "codeEpci", "SIREN_EPCI", "siren_epci"),
+        "region": _pick(raw, "codeRegion", "code_insee_de_la_region", "INSEE_REG", "insee_reg"),
+        "epci_code": _pick(raw, "codeEpci", "codes_siren_des_epci", "code_siren_de_l_epci",
+                           "SIREN_EPCI", "siren_epci"),
         "population": int(pop) if pop not in (None, "") else None,
     }
 
@@ -109,6 +115,40 @@ def _decode_gpb(blob: bytes) -> BaseGeometry:
     return shapely_wkb.loads(b[header_len:])
 
 
+_LAYER_EXCLURE = ("chef_lieu", "associee", "deleguee", "associee_ou_deleguee")
+
+
+def _choose_layer(cols: list, layer: str | None) -> tuple[str, str]:
+    """Sélectionne (table, colonne géométrie) de la couche communale.
+
+    Admin Express contient une quinzaine de couches (commune, chef_lieu_de_commune,
+    commune_associee_ou_deleguee, departement…). En auto, on prend la couche
+    **`commune` exacte** (le polygone), jamais les chef-lieux (points) ni les communes
+    associées/déléguées — sinon un `LIKE '%commune%'` naïf attrape chef_lieu_de_commune.
+    """
+    if not cols:
+        raise CommuneImportError("aucune couche géométrique dans le GeoPackage")
+    by_name = {c["table_name"].lower(): c for c in cols}
+    if layer:
+        c = by_name.get(layer.lower())
+        if c is None:
+            raise CommuneImportError(
+                f"couche '{layer}' absente (couches: {', '.join(by_name)})"
+            )
+        return c["table_name"], c["column_name"]
+    if "commune" in by_name:
+        c = by_name["commune"]
+        return c["table_name"], c["column_name"]
+    for name, c in by_name.items():
+        if "commune" in name and not any(k in name for k in _LAYER_EXCLURE):
+            return c["table_name"], c["column_name"]
+    if len(cols) == 1:
+        return cols[0]["table_name"], cols[0]["column_name"]
+    raise CommuneImportError(
+        f"plusieurs couches, préciser layer= (couches: {', '.join(by_name)})"
+    )
+
+
 def _read_geopackage(path: Path, layer: str | None) -> Iterator[tuple[dict, BaseGeometry]]:
     gpkg = sqlite3.connect(path)
     gpkg.row_factory = sqlite3.Row
@@ -116,27 +156,7 @@ def _read_geopackage(path: Path, layer: str | None) -> Iterator[tuple[dict, Base
         cols = gpkg.execute(
             "SELECT table_name, column_name FROM gpkg_geometry_columns"
         ).fetchall()
-        if not cols:
-            raise CommuneImportError(f"aucune couche géométrique dans {path}")
-        chosen = None
-        for c in cols:
-            if layer and c["table_name"].lower() == layer.lower():
-                chosen = c
-                break
-            if layer is None and "commune" in c["table_name"].lower():
-                chosen = c
-                break
-        if chosen is None:
-            if layer is not None:
-                raise CommuneImportError(f"couche '{layer}' absente de {path}")
-            if len(cols) == 1:
-                chosen = cols[0]
-            else:
-                noms = ", ".join(c["table_name"] for c in cols)
-                raise CommuneImportError(
-                    f"plusieurs couches ({noms}) ; préciser layer= pour {path}"
-                )
-        table, geom_col = chosen["table_name"], chosen["column_name"]
+        table, geom_col = _choose_layer(cols, layer)
         for row in gpkg.execute(f'SELECT * FROM "{table}"'):
             d = dict(row)
             blob = d.pop(geom_col, None)
