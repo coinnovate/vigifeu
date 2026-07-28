@@ -23,6 +23,8 @@ from typing import Iterable, Sequence
 
 from pyproj import Transformer
 from shapely.geometry import MultiPoint
+from shapely.geometry.base import BaseGeometry
+from shapely.ops import transform as _shp_transform
 
 _WGS84 = "EPSG:4326"
 _LAMBERT93 = "EPSG:2154"
@@ -32,6 +34,22 @@ _LAMBERT93 = "EPSG:2154"
 def _transformer() -> Transformer:
     # always_xy : entrées/sorties en (lon, lat)/(x, y), pas l'ordre géographique.
     return Transformer.from_crs(_WGS84, _LAMBERT93, always_xy=True)
+
+
+@lru_cache(maxsize=1)
+def _transformer_inv() -> Transformer:
+    # L93 → WGS84 (import de référentiels livrés en Lambert-93).
+    return Transformer.from_crs(_LAMBERT93, _WGS84, always_xy=True)
+
+
+def to_l93_geom(geom_wgs84: BaseGeometry) -> BaseGeometry:
+    """Reprojette une géométrie shapely WGS84 (lon/lat) → Lambert-93 (mètres)."""
+    return _shp_transform(_transformer().transform, geom_wgs84)
+
+
+def to_wgs84_geom(geom_l93: BaseGeometry) -> BaseGeometry:
+    """Reprojette une géométrie shapely Lambert-93 → WGS84 (lon/lat), pour stockage WKT."""
+    return _shp_transform(_transformer_inv().transform, geom_l93)
 
 
 def project(lat: float, lon: float) -> tuple[float, float]:
