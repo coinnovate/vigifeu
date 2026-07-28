@@ -13,6 +13,7 @@ import sqlite3
 
 from jinja2 import Environment
 
+from vigifeu.generate import jsonld, og
 from vigifeu.lexique import fr
 
 
@@ -155,10 +156,23 @@ def load_commune_context(conn: sqlite3.Connection, config: dict, code_insee: str
         fil.append({"label": f"Département {dept}", "href": f"/departements/{dept}/"})
     fil.append({"label": commune["nom"], "href": None})
 
+    # « depuis 1973 » réservé aux communes Prométhée (arc méditerranéen) ; « depuis 2006 »
+    # sinon (Spec 04 §5, Spec 01 §5.3). Prométhée non importé en v1 → 2006 partout.
+    depuis = " depuis 2006"
+    graph = jsonld.render_graph(
+        jsonld.organization(gen["base_url"], gen["marque"]),
+        jsonld.commune_place(gen["base_url"], nom=commune["nom"], url_path=canonical_path,
+                             dept=dept, population=commune["population"],
+                             lat=commune["centroid_lat"], lon=commune["centroid_lon"],
+                             depuis=depuis),
+    )
+
     return {
         "base_url": gen["base_url"],
         "marque": gen["marque"],
         "canonical_path": canonical_path,
+        "og_image": og.og_path(dept),
+        "jsonld": graph,
         "url_seg": seg,
         "page_title": f"Incendies à {commune['nom']} ({dept}) — situation, historique, exposition | {gen['marque']}",
         "page_description": (situation[0]["phrase"] if situation

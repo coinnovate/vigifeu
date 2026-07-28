@@ -24,6 +24,7 @@ from vigifeu.generate.carte import load_carte_context, render_carte
 from vigifeu.generate.commune import load_commune_context, render_commune
 from vigifeu.generate.feu import load_fire_context, render_feu
 from vigifeu.generate.geojson import feu_geojson, national_geojson
+from vigifeu.generate.og import write_og_images
 from vigifeu.generate.publish import ensure_public_id
 from vigifeu.generate.templating import make_env
 from vigifeu.generate.writer import page_path, write_atomic
@@ -75,6 +76,7 @@ def sync_static(config: dict) -> None:
     if src.exists():
         shutil.copytree(src, site / "static", dirs_exist_ok=True)
     write_carte_config(config)
+    write_og_images(config)
 
 
 def write_carte_config(config: dict) -> Path:

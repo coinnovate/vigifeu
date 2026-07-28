@@ -184,6 +184,45 @@ def test_commune_structure_lint_et_marque(commune_html):
         assert terme.lower() not in bas, f"terme interdit : {terme!r}"
 
 
+def _extract_jsonld(page):
+    import json
+    import re
+    m = re.search(r'<script type="application/ld\+json">(.*?)</script>', page, re.S)
+    assert m, "aucun bloc JSON-LD"
+    return json.loads(m.group(1))
+
+
+def test_jsonld_feu_event(html):
+    _, page = html
+    data = _extract_jsonld(page)
+    assert data["@context"] == "https://schema.org"
+    types = {n["@type"] for n in data["@graph"]}
+    assert {"Organization", "Event"} <= types
+    event = next(n for n in data["@graph"] if n["@type"] == "Event")
+    assert event["name"].startswith("Feu de Saumos")
+    assert event["startDate"].startswith("2026-07-22") and event["startDate"].endswith("Z")
+    assert event["about"] and all(c["@type"] == "Place" for c in event["about"])  # communes liées
+
+
+def test_jsonld_commune_place(commune_html):
+    _, page = commune_html
+    data = _extract_jsonld(page)
+    types = {n["@type"] for n in data["@graph"]}
+    assert {"Organization", "AdministrativeArea"} <= types
+    place = next(n for n in data["@graph"] if n["@type"] == "AdministrativeArea")
+    assert place["name"] == "Saumos"
+    assert "geo" in place and place["geo"]["@type"] == "GeoCoordinates"
+
+
+def test_og_meta_par_departement(html, commune_html):
+    _, page = html
+    assert 'property="og:title"' in page
+    assert 'property="og:image" content="https://sentifeu.fr/static/og/dept-33.svg"' in page
+    assert 'name="twitter:card"' in page
+    _, cpage = commune_html
+    assert 'property="og:image" content="https://sentifeu.fr/static/og/dept-33.svg"' in cpage
+
+
 def test_feu_geojson_cellules_et_enveloppe(saumos_archive):
     conn, config, saumos_id = saumos_archive
     gj = feu_geojson(conn, config, saumos_id)

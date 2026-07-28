@@ -11,8 +11,10 @@ from __future__ import annotations
 import sqlite3
 
 from jinja2 import Environment
+from shapely import wkt
 
 from vigifeu.engine import version
+from vigifeu.generate import jsonld, og
 from vigifeu.lexique import fr
 
 _DN = {"D": "jour", "N": "nuit"}
@@ -236,13 +238,30 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
     wobs = _latest_weather(conn, event_id)
     gen = config["generate"]
     canonical_path = f"/feux/{fire['public_id']}/"
+    description = synthese[0] if synthese else nom
+
+    lat = lon = None
+    if latest and latest["geometry_wkt"]:
+        c = wkt.loads(latest["geometry_wkt"]).centroid
+        lat, lon = c.y, c.x
+    emprise = [{"nom": r["nom"], "href": f"/communes/{r['code_insee']}-{r['slug']}/"}
+               for r in relations if r["rel_type"] == "emprise_dans_commune"][:8]
+    graph = jsonld.render_graph(
+        jsonld.organization(gen["base_url"], gen["marque"]),
+        jsonld.feu_event(gen["base_url"], gen["marque"], nom=nom, url_path=canonical_path,
+                         description=description, first_acq=fire["first_acq_at"],
+                         last_acq=fire["last_acq_at"], lifecycle=fire["lifecycle"],
+                         lat=lat, lon=lon, communes=emprise),
+    )
 
     return {
         "base_url": gen["base_url"],
         "marque": gen["marque"],
         "canonical_path": canonical_path,
+        "og_image": og.og_path(dept),
+        "jsonld": graph,
         "page_title": f"{nom} — suivi satellite, communes concernées | {gen['marque']}",
-        "page_description": (synthese[0] if synthese else nom),
+        "page_description": description,
         "fil_ariane": [
             {"label": "Accueil", "href": "/"},
             {"label": nom, "href": None},

@@ -11,6 +11,7 @@ import sqlite3
 
 from jinja2 import Environment
 
+from vigifeu.generate import jsonld, og
 from vigifeu.lexique import fr
 
 
@@ -38,6 +39,8 @@ def load_carte_context(conn: sqlite3.Connection, config: dict) -> dict:
         "base_url": gen["base_url"],
         "marque": gen["marque"],
         "canonical_path": "/",
+        "og_image": og.og_path(None),
+        "jsonld": jsonld.render_graph(jsonld.organization(gen["base_url"], gen["marque"])),
         "page_title": f"{gen['marque']} — carte des incendies de végétation en France",
         "page_description": (
             "Suivi satellite des incendies de végétation en France : carte des feux "

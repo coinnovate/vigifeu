@@ -10,7 +10,15 @@
 <title>{% block title %}{{ page_title }}{% endblock %}</title>
 <meta name="description" content="{% block description %}{{ page_description }}{% endblock %}">
 <link rel="canonical" href="{{ base_url }}{{ canonical_path }}">
+<meta property="og:site_name" content="{{ marque }}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{ page_title }}">
+<meta property="og:description" content="{{ page_description }}">
+<meta property="og:url" content="{{ base_url }}{{ canonical_path }}">
+{% if og_image %}<meta property="og:image" content="{{ base_url }}{{ og_image }}">
+<meta name="twitter:card" content="summary_large_image">{% endif %}
 <link rel="stylesheet" href="/static/css/vigifeu.css">
+{% if jsonld %}<script type="application/ld+json">{{ jsonld|safe }}</script>{% endif %}
 {% block extra_head %}{% endblock %}
 </head>
 <body>
