@@ -86,13 +86,14 @@ def slugify(nom: str) -> str:
 
 # --- lecture GeoJSON (fixture) ---
 
-def _read_geojson(path: Path) -> Iterator[tuple[dict, BaseGeometry]]:
+def _read_geojson(path: Path) -> Iterator[tuple[dict, BaseGeometry, bool]]:
+    # Triplet (attrs, géométrie, is_l93) : GeoJSON = WGS84 (is_l93=False).
     fc = json.loads(path.read_text(encoding="utf-8"))
     for feat in fc.get("features", []):
         g = feat.get("geometry")
         if not g:
             continue
-        yield _normalize(feat.get("properties", {})), shape(g)  # WGS84
+        yield _normalize(feat.get("properties", {})), shape(g), False
 
 
 # --- lecture GeoPackage (production, pur Python) ---
@@ -149,7 +150,9 @@ def _choose_layer(cols: list, layer: str | None) -> tuple[str, str]:
     )
 
 
-def _read_geopackage(path: Path, layer: str | None) -> Iterator[tuple[dict, BaseGeometry]]:
+def _read_geopackage(path: Path, layer: str | None) -> Iterator[tuple[dict, BaseGeometry, bool]]:
+    # Admin Express métropole = Lambert-93 (is_l93=True) : on livre la géométrie native,
+    # sans reprojection dans le lecteur — import_communes reprojette une seule fois.
     gpkg = sqlite3.connect(path)
     gpkg.row_factory = sqlite3.Row
     try:
@@ -162,15 +165,14 @@ def _read_geopackage(path: Path, layer: str | None) -> Iterator[tuple[dict, Base
             blob = d.pop(geom_col, None)
             if blob is None:
                 continue
-            g_l93 = _decode_gpb(blob)
-            yield _normalize(d), geo.to_wgs84_geom(g_l93)
+            yield _normalize(d), _decode_gpb(blob), True
     finally:
         gpkg.close()
 
 
 # --- import ---
 
-def _iter_source(path: Path, layer: str | None) -> Iterator[tuple[dict, BaseGeometry]]:
+def _iter_source(path: Path, layer: str | None) -> Iterator[tuple[dict, BaseGeometry, bool]]:
     suffix = path.suffix.lower()
     if suffix in (".geojson", ".json"):
         return _read_geojson(path)
@@ -185,22 +187,29 @@ def import_communes(
     *,
     millesime: str,
     layer: str | None = None,
+    progress_every: int = 5000,
 ) -> dict:
     """Importe/actualise le référentiel commune depuis un fichier (idempotent).
 
     Géométrie stockée en WGS84 WKT ; `surface_ha` et le centroïde calculés en
     Lambert-93 (aire juste, centroïde reprojeté). Upsert par code_insee : rejouer
-    un millésime met à jour sans dupliquer.
+    un millésime met à jour sans dupliquer. Une seule reprojection par commune ;
+    progression affichée tous les `progress_every` (0 = silencieux). Un COMMIT
+    périodique borne la transaction et rend un import interrompu partiellement utile.
     """
     path = Path(source)
     if not path.exists():
         raise CommuneImportError(f"source introuvable: {path}")
 
     n = 0
-    for attrs, geom_wgs84 in _iter_source(path, layer):
-        geom_l93 = geo.to_l93_geom(geom_wgs84)
-        c_l93 = geom_l93.centroid
-        c_lon, c_lat = geo.to_wgs84_geom(c_l93).coords[0]
+    for attrs, geom, is_l93 in _iter_source(path, layer):
+        if is_l93:
+            geom_l93 = geom
+            geom_wgs84 = geo.to_wgs84_geom(geom_l93)
+        else:
+            geom_wgs84 = geom
+            geom_l93 = geo.to_l93_geom(geom_wgs84)
+        c_lon, c_lat = geo.to_wgs84_geom(geom_l93.centroid).coords[0]
         conn.execute(
             """INSERT INTO commune
                  (code_insee, slug, nom, dept, region, epci_code, population,
@@ -225,5 +234,8 @@ def import_communes(
             },
         )
         n += 1
+        if progress_every and n % progress_every == 0:
+            conn.commit()  # borne la transaction + point de reprise (upsert idempotent)
+            print(f"  … {n} communes importées", flush=True)
     conn.commit()
     return {"imported": n, "millesime": millesime}
