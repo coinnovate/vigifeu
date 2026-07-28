@@ -22,10 +22,14 @@ from datetime import UTC, datetime
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+from vigifeu.engine import geo
 from vigifeu.engine.cluster import apply_lifecycle
 from vigifeu.engine.overpass import build_overpasses
 from vigifeu.engine.pipeline import process_cycle
+from vigifeu.engine.relations import fire_footprint_l93
+from vigifeu.engine.wind import recompute_direction_vent
 from vigifeu.ingest.firms import fetch_cycle, fetch_firms_backfill
+from vigifeu.ingest.weather import fetch_weather_obs
 from vigifeu.model.archive import archive_sweep
 from vigifeu.model.db import connect, load_config, migrate, sync_satellite_sources
 from vigifeu.model.monitoring import check_collection_gap, ping_healthcheck
@@ -85,6 +89,36 @@ def main() -> None:
                 res["to_plus_detecte"], res["to_archive"],
             )
 
+    def job_weather_obs() -> None:
+        # Spec 02 §2 : météo constatée pour chaque feu actif qualifié végétation,
+        # au centroïde de l'empreinte ; déclenche le recalcul direction_vent (§7).
+        fires = conn.execute(
+            "SELECT id FROM fire_event WHERE lifecycle='actif' "
+            "AND qualification='vegetation_confirme'"
+        ).fetchall()
+        n_ok = n_rel = 0
+        for f in fires:
+            footprint = fire_footprint_l93(conn, config, f["id"])
+            if footprint is None:
+                continue
+            pt = geo.to_wgs84_geom(footprint.centroid)
+            res = fetch_weather_obs(conn, config, fire_event_id=f["id"], lat=pt.y, lon=pt.x)
+            if res["status"] != "ok":
+                log.warning("weather_obs feu %s: %s", f["id"], res.get("error"))
+                continue
+            n_ok += 1
+            obs = conn.execute(
+                "SELECT observed_at FROM weather_obs WHERE id=?", (res["weather_obs_id"],)
+            ).fetchone()
+            rel = recompute_direction_vent(conn, config, f["id"], stamp=obs["observed_at"])
+            n_rel += rel["opened"] + rel["closed"]
+        if fires:
+            log.info(
+                "weather_obs: %d/%d feux échantillonnés, %d relations direction_vent modifiées",
+                n_ok, len(fires), n_rel,
+            )
+        ping_healthcheck(os.environ.get("HEALTHCHECK_WEATHER_URL"))
+
     def job_backfill() -> None:
         results = fetch_firms_backfill(conn, config)
         rattrapes = [r for r in results if r["status"] == "ok"]
@@ -114,6 +148,11 @@ def main() -> None:
         job_fetch_firms, "interval",
         minutes=config["firms"]["fetch_interval_min"],
         id="fetch_firms", max_instances=1, coalesce=True,
+    )
+    scheduler.add_job(
+        job_weather_obs, "interval",
+        minutes=config["firms"]["fetch_interval_min"],
+        id="weather_obs", max_instances=1, coalesce=True,
     )
     scheduler.add_job(
         job_backfill, "interval", hours=1,
