@@ -7,6 +7,7 @@
 <meta name="description" content="Feu suivi du 22/07/2026 au 27/07/2026.">
 <link rel="canonical" href="https://sentifeu.fr/feux/2026-saumos/">
 <link rel="stylesheet" href="/static/css/vigifeu.css">
+<link rel="stylesheet" href="/static/css/maplibre-gl.css">
 </head>
 <body>
 <a class="skip" href="#contenu">Aller au contenu</a>
@@ -37,6 +38,18 @@ Première détection : 22/07/2026 à 11:55 UTC. Dernière observation : 27/07/20
 <p>Emprise estimée d'après les détections : environ 42 385 ha (estimation satellite, non officielle).</p>
 <p>Le front de détection a progressé d'environ 2,8 km vers le nord-ouest entre le 27/07/2026 à 02:17 UTC et le 27/07/2026 à 02:53 UTC.</p>
 <p>Intensité radiative totale : 9 MW au passage de nuit du 27/07/2026.</p>
+</section>
+
+<section class="carte-feu">
+<h2>Carte du feu</h2>
+<div class="legende-carte" aria-hidden="true">
+<span><i class="pastille front_actif"></i> Zone détectée au dernier passage</span>
+<span><i class="pastille recent"></i> Détectée il y a moins de 24 h</span>
+<span><i class="pastille plus_detecte"></i> Plus détectée depuis plus de 24 h</span>
+</div>
+<div class="carte" data-carte="feu" data-geojson="feu.geojson" role="img"
+     aria-label="Carte des zones détectées du feu ; description complète dans la synthèse ci-dessus"></div>
+<noscript><p class="indispo">La carte interactive nécessite JavaScript. La synthèse et la chronologie ci-dessus décrivent le feu sans carte.</p></noscript>
 </section>
 
 <section class="communes">
@@ -315,5 +328,8 @@ En cas de risque, référez-vous aux sources officielles (préfecture, SDIS, mai
 <p class="marque"><a href="/">Sentifeu</a> — veille satellitaire des incendies de végétation.</p>
 
 </footer>
+<script src="/static/js/maplibre-gl.js" defer></script>
+<script src="/static/carte-config.js" defer></script>
+<script src="/static/js/carte.js" defer></script>
 </body>
 </html>

@@ -11,6 +11,8 @@ restent en file — non marqués, donc repris au prochain passage une fois câbl
 
 from __future__ import annotations
 
+import json
+import os
 import shutil
 import sqlite3
 import sys
@@ -18,22 +20,26 @@ from pathlib import Path
 
 from jinja2 import Environment
 
+from vigifeu.generate.carte import load_carte_context, render_carte
 from vigifeu.generate.commune import load_commune_context, render_commune
 from vigifeu.generate.feu import load_fire_context, render_feu
+from vigifeu.generate.geojson import feu_geojson, national_geojson
 from vigifeu.generate.publish import ensure_public_id
 from vigifeu.generate.templating import make_env
 from vigifeu.generate.writer import page_path, write_atomic
 
 
 def _handle_feu(conn, config, env, page_ref, site_dir) -> Path | None:
-    """Génère la fiche d'un feu. None si le feu n'est pas publiable (suspect)."""
+    """Génère la fiche d'un feu + son GeoJSON. None si le feu n'est pas publiable (suspect)."""
     event_id = int(page_ref)
     public_id = ensure_public_id(conn, event_id)
     if public_id is None:
         return None
     ctx = load_fire_context(conn, config, event_id)
-    html = render_feu(env, ctx)
-    return write_atomic(page_path(site_dir, "feu", public_id), html)
+    path = write_atomic(page_path(site_dir, "feu", public_id), render_feu(env, ctx))
+    gj = json.dumps(feu_geojson(conn, config, event_id), ensure_ascii=False)
+    write_atomic(path.parent / "feu.geojson", gj)
+    return path
 
 
 def _handle_commune(conn, config, env, page_ref, site_dir) -> Path | None:
@@ -46,20 +52,46 @@ def _handle_commune(conn, config, env, page_ref, site_dir) -> Path | None:
     return write_atomic(page_path(site_dir, "commune", f"{page_ref}-{row['slug']}"), html)
 
 
+def _handle_carte(conn, config, env, page_ref, site_dir) -> Path:
+    """Génère la carte nationale (accueil) + son GeoJSON `/feux.geojson`."""
+    ctx = load_carte_context(conn, config)
+    path = write_atomic(page_path(site_dir, "carte", page_ref), render_carte(env, ctx))
+    gj = json.dumps(national_geojson(conn, config), ensure_ascii=False)
+    write_atomic(Path(site_dir) / "feux.geojson", gj)
+    return path
+
+
 _HANDLERS = {
     "feu": _handle_feu,
     "commune": _handle_commune,
-    # "carte": _handle_carte,       # étape C — carte nationale (MapTiler)
+    "carte": _handle_carte,
 }
 
 
 def sync_static(config: dict) -> None:
-    """Copie les assets statiques (css, js, pmtiles) dans le site généré."""
+    """Copie les assets statiques (css, js, pmtiles) puis écrit la config carte (clé env)."""
     src = Path(config["generate"]["static_dir"])
-    if not src.exists():
-        return
-    dst = Path(config["generate"]["site_dir"]) / "static"
-    shutil.copytree(src, dst, dirs_exist_ok=True)
+    site = Path(config["generate"]["site_dir"])
+    if src.exists():
+        shutil.copytree(src, site / "static", dirs_exist_ok=True)
+    write_carte_config(config)
+
+
+def write_carte_config(config: dict) -> Path:
+    """Écrit /static/carte-config.js avec la clé MapTiler (secret d'env, jamais en dur).
+
+    La clé n'entre JAMAIS dans le HTML des fiches ni le dépôt : elle vit uniquement
+    dans ce fichier généré (sous data/site, non versionné). Sans clé, la carte se
+    masque proprement et l'alternative textuelle reste (Spec 04 §8).
+    """
+    key = os.environ.get("VIGIFEU_MAPTILER_KEY", "")
+    mapid = config["generate"].get("maptiler_map", "dataviz")
+    js = (
+        f"window.SENTIFEU_MAPTILER_KEY = {json.dumps(key)};\n"
+        f"window.SENTIFEU_MAPTILER_MAP = {json.dumps(mapid)};\n"
+    )
+    dst = Path(config["generate"]["site_dir"]) / "static" / "carte-config.js"
+    return write_atomic(dst, js)
 
 
 def consume(conn: sqlite3.Connection, config: dict, *, stamp: str,

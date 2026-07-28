@@ -143,6 +143,7 @@ referentiel_millesime = "2026"         # millésime Admin Express affiché en at
 # France auto-hébergé avant le lancement public (Lot 5). La clé est un secret d'env
 # (VIGIFEU_MAPTILER_KEY), jamais dans ce fichier.
 carte_style = "maptiler-raster"
+maptiler_map = "dataviz"                # fond sobre (clair) — ne concurrence pas les cellules du feu
 
 [lexique]
 # Barèmes de traduction versionnés (Spec 03 §2.5 / Spec 01 §3.5) — traduisent une

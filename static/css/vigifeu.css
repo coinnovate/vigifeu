@@ -56,6 +56,17 @@ th, td { text-align: left; padding: .35rem .6rem; border-bottom: 1px solid var(-
 
 .indispo { color: var(--gris); font-style: italic; }
 
+/* Carte (enrichissement) — hauteur fixe, la légende contractuelle est en HTML */
+.carte { width: 100%; height: 22rem; border: 1px solid var(--trait); border-radius: .3rem; margin: .5rem 0; background: var(--fond-doux); }
+.carte[hidden] { display: none; }
+.legende-carte { display: flex; flex-wrap: wrap; gap: 1rem; font-size: .85rem; margin: .3rem 0 .8rem; }
+.legende-carte span { display: inline-flex; align-items: center; gap: .35rem; }
+.pastille { width: .8rem; height: .8rem; border-radius: .2rem; display: inline-block; }
+.pastille.front_actif { background: var(--front); }
+.pastille.recent { background: var(--recent); }
+.pastille.plus_detecte { background: var(--ancien); }
+.legende-cone { font-size: .8rem; color: var(--gris); font-style: italic; }
+
 details { margin: .6rem 0; }
 summary { cursor: pointer; font-weight: 600; }
 

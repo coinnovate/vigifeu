@@ -2,8 +2,11 @@
 {#
   Fiche feu (Spec 03 §3). Toutes les phrases métier viennent du lexique (via feu.py) ;
   ce gabarit n'apporte que la structure et les libellés de sections. Complet sans JS
-  (P3) : la carte interactive (§3.3) s'ajoutera en enrichissement (étape C).
+  (P3) : la carte (§3.3) est un enrichissement, la synthèse en est l'alternative texte.
 #}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/maplibre-gl.css">
+{% endblock %}
 {% block content %}
 {% if bandeau_archive %}
 <div class="bandeau" role="note">{{ bandeau_archive }}</div>
@@ -28,6 +31,19 @@
 {% for phrase in synthese %}
 <p>{{ phrase }}</p>
 {% endfor %}
+</section>
+
+{# 3.3 Carte du feu — enrichissement ; la synthèse ci-dessus en est l'alternative texte (§8) #}
+<section class="carte-feu">
+<h2>Carte du feu</h2>
+<div class="legende-carte" aria-hidden="true">
+<span><i class="pastille front_actif"></i> Zone détectée au dernier passage</span>
+<span><i class="pastille recent"></i> Détectée il y a moins de 24 h</span>
+<span><i class="pastille plus_detecte"></i> Plus détectée depuis plus de 24 h</span>
+</div>
+<div class="carte" data-carte="feu" data-geojson="feu.geojson" role="img"
+     aria-label="Carte des zones détectées du feu ; description complète dans la synthèse ci-dessus"></div>
+<noscript><p class="indispo">La carte interactive nécessite JavaScript. La synthèse et la chronologie ci-dessus décrivent le feu sans carte.</p></noscript>
 </section>
 
 {# 3.4 Communes concernées — paliers proches ouverts, paliers lointains repliés #}
@@ -102,4 +118,9 @@
 </section>
 
 </article>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/maplibre-gl.js" defer></script>
+<script src="/static/carte-config.js" defer></script>
+<script src="/static/js/carte.js" defer></script>
 {% endblock %}

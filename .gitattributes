@@ -7,3 +7,8 @@
 
 # La fixture Parquet est binaire — jamais de conversion de fins de ligne.
 *.parquet binary
+
+# Bibliothèque MapLibre vendorisée (minifiée) : livrée telle quelle, pas de conversion EOL
+# ni de diff (upstream v5.6.1, remplacée en bloc lors d'une montée de version).
+static/js/maplibre-gl.js -text -diff
+static/css/maplibre-gl.css -text -diff

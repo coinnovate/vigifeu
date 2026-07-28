@@ -1,0 +1,36 @@
+{% extends "base.html.j2" %}
+{#
+  Carte nationale — page d'accueil (Spec 04 §8). La carte est un enrichissement ; la
+  liste des feux ci-dessous est le contenu complet sans JS et le maillage interne.
+#}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/maplibre-gl.css">
+{% endblock %}
+{% block content %}
+<article class="accueil">
+<h1>Incendies de végétation en France</h1>
+<p>Suivi satellite en continu (NASA FIRMS). Sélectionnez un feu pour sa fiche détaillée.</p>
+
+<div class="carte" data-carte="national" data-geojson="{{ geojson_href }}" role="img"
+     aria-label="Carte des feux de végétation en cours en France ; liste complète ci-dessous"></div>
+<noscript><p class="indispo">La carte interactive nécessite JavaScript. La liste des feux en cours ci-dessous est complète sans carte.</p></noscript>
+
+<section class="feux-en-cours">
+<h2>Feux suivis en cours</h2>
+{% if feux %}
+<ul>
+{% for f in feux %}
+<li><a href="{{ f.url }}">{{ f.nom }}</a> <span class="badge {{ f.classe }}">{{ f.badge }}</span></li>
+{% endfor %}
+</ul>
+{% else %}
+<p>Aucun feu de végétation suivi actuellement à l'échelle nationale.</p>
+{% endif %}
+</section>
+</article>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/maplibre-gl.js" defer></script>
+<script src="/static/carte-config.js" defer></script>
+<script src="/static/js/carte.js" defer></script>
+{% endblock %}
