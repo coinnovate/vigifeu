@@ -1,0 +1,7 @@
+"Certaines données sont associées à l'ancienne version du formulaire incendie. Consultez la documentation pour plus d'informations."
+"Nombre d'incendies suivant les critères de sélection : 3"
+"Critères de sélection =>";"Date de première alerte, de : 2016-01-01 00:00:00";"Date de première alerte, jusqu'à : 2025-12-31 23:59:00";"France entière";"Type de feu : F"
+Année;Numéro;Département;"Code INSEE";"Nom de la commune";"Date de première alerte";"Surface parcourue (m2)";"Surface forêt (m2)";Nature;"Précision de la donnée"
+2022;4608;"33";"33214";"Lacanau";"2022-07-13 15:37:00";70000000;69000000;"Feu de forêt";""
+2020;1234;"33";"33503";"Saumos";"2020-08-02 10:00:00";150000;140000;"Feu de forêt";""
+2018;9999;"99";"99999";"Commune inconnue";"2018-01-01 12:00:00";500000;500000;"Feu de forêt";""

@@ -60,6 +60,9 @@ def _iso_date(d: str | None) -> str | None:
     m = _DMY.match(d)
     if m:
         return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
+    # "AAAA-MM-JJ HH:MM:SS" (export BDIFF réel) → garder la date seule
+    if len(d) >= 10 and d[4] == "-" and d[7] == "-":
+        return d[:10]
     return d  # déjà ISO (ou format inconnu conservé tel quel)
 
 
@@ -92,9 +95,17 @@ def _read_csv(path: Path) -> Iterator[dict]:
             continue
     else:
         raise BdiffImportError(f"encodage illisible: {path}")
-    sample = text[:4096]
+    lines = text.splitlines()
+    # L'export BDIFF réel préfixe des lignes de préambule (avertissement, nombre de
+    # résultats, critères de sélection) avant l'en-tête. On saute jusqu'à la première
+    # ligne contenant « Code INSEE ». Sans préambule (CSV générique), rien n'est sauté.
+    for i, ln in enumerate(lines):
+        if "code insee" in ln.lower():
+            lines = lines[i:]
+            break
+    sample = "\n".join(lines[:3])
     delim = ";" if sample.count(";") >= sample.count(",") else ","
-    yield from csv.DictReader(text.splitlines(), delimiter=delim)
+    yield from csv.DictReader(lines, delimiter=delim)
 
 
 def import_bdiff(conn: sqlite3.Connection, source: str | Path) -> dict:

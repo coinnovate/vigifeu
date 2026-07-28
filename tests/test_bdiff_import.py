@@ -14,6 +14,7 @@ from vigifeu.referentiels.communes import import_communes
 
 COMMUNES = Path(__file__).parent / "fixtures" / "communes" / "gironde-ouest.geojson"
 BDIFF = Path(__file__).parent / "fixtures" / "communes" / "bdiff-gironde-extrait.csv"
+BDIFF_REEL = Path(__file__).parent / "fixtures" / "communes" / "bdiff-format-reel.csv"
 
 
 def _with_communes(conn):
@@ -56,6 +57,22 @@ def test_deux_feux_une_commune(db):
         )
     }
     assert annees == {2019, 2020}
+
+
+def test_import_bdiff_format_reel(db):
+    """Export BDIFF réel : lignes de préambule avant l'en-tête + dates horodatées."""
+    conn, _ = db
+    _with_communes(conn)
+    res = import_bdiff(conn, BDIFF_REEL)
+    # 3 lignes dont 99999 (inconnue) → 2 importées, préambule sauté (sinon 0)
+    assert res["imported"] == 2
+    assert res["skipped_unknown_commune"] == 1
+    r = conn.execute(
+        "SELECT surface_ha, date_alerte, type_feu FROM commune_fire_history WHERE code_insee='33214'"
+    ).fetchone()
+    assert r["surface_ha"] == 7000.0
+    assert r["date_alerte"] == "2022-07-13"  # "2022-07-13 15:37:00" tronqué à la date
+    assert r["type_feu"] == "Feu de forêt"
 
 
 def test_import_bdiff_idempotent(db):
