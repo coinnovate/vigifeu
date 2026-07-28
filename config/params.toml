@@ -129,6 +129,22 @@ retry_wait_max_s = 60
 provider_effis = "effis"
 provider_meteo_forets = "meteo-france"
 
+[lexique]
+# Barèmes de traduction versionnés (Spec 03 §2.5 / Spec 01 §3.5) — traduisent une
+# valeur brute d'indice en classe verbale, le chiffre restant en second niveau (P1).
+# Le lexique fr.py n'assemble que des formulations contractuelles ; SEULS les seuils
+# numériques (tunables) vivent ici, jamais les libellés (contractuels, dans le code).
+# DC (sécheresse profonde) — 4 classes : < faible / modérée / élevée / > très élevée.
+# VALEURS DE DÉPART à confronter à la littérature et aux pratiques Météo-France avant
+# première publication (Spec 03 §7.1, tâche documentaire du Lot 4).
+dc_seuils = [100, 300, 500]
+# FWI — 6 classes de danger EFFIS (breakpoints officiels Copernicus/EFFIS) :
+# très faible / faible / modéré / élevé / très élevé / extrême.
+fwi_seuils = [5.2, 11.2, 21.3, 38.0, 50.0]
+# SIM (humidité des sols) — percentile vs normale saisonnière, 4 classes :
+# très inférieure / inférieure / proche / supérieure à la normale de saison.
+sim_percentile_seuils = [10, 40, 60]
+
 [monitoring]
 # Spec 02 §9 — le silence d'une source est une information critique en saison.
 # Mécanisme principal : dead-man switch healthchecks.io (un ping manquant EST

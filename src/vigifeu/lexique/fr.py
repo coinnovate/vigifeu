@@ -1,0 +1,398 @@
+"""Lexique contractuel français (Spec 03 §2).
+
+Chaque fonction traduit une donnée du modèle (Spec 01) en une phrase **française
+complète, datée et sourçable** (Spec 03 P1/P2). Règles transversales appliquées ici :
+
+* **P4 — la catégorie de donnée est visible.** `mesuree` sans qualificatif ;
+  `estimee` porte « estimation »/« estimé » ; `prevue` porte « Prévision {source} » ;
+  `declaree` cite l'acte. Ces marqueurs sont dans les gabarits ci-dessous.
+* **P5 — l'horodatage affiché est en UTC.** Les fonctions rendent l'heure absolue
+  UTC ; les durées relatives (« il y a 3 h ») sont une surcouche JS côté client,
+  hors lexique.
+* **Interdits absolus** (cadrage §4.1, Spec 03 §2.3/§2.1) : aucune de ces fonctions
+  ne produit « zone menacée », « propagation estimée », « sera touché », « éteint »,
+  « maîtrisé » (hors citation `declaree`)… Le lint CI (Spec 04 §9.1) le vérifie sur
+  le HTML généré ; `TERMES_INTERDITS` en est la source.
+
+Les barèmes numériques (seuils DC/FWI/SIM) sont versionnés dans `config/params.toml`
+`[lexique]` (tunables, Spec 03 §7.1) ; les **libellés** de classes, eux, sont
+contractuels et vivent ici.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+# Termes proscrits (source unique du lint lexique, Spec 04 §9.1 / cadrage §4.1).
+# « maîtrisé »/« fixé »/« éteint » ne sont admis QUE dans une citation `declaree`
+# (« La préfecture indique… ») — le lint les tolère derrière l'attribut de citation.
+TERMES_INTERDITS: tuple[str, ...] = (
+    "éteint",
+    "menacé",
+    "menacée",
+    "propagation estimée",
+    "sera touché",
+    "sera touchée",
+    "hors de contrôle",
+    "en voie d'extinction",
+    "zone éteinte",
+    "zone sécurisée",
+    "front de flammes",
+)
+
+# Légende contractuelle du cône de vent (Spec 03 §2.3) — jamais reformulée.
+LEGENDE_CONE = (
+    "Direction actuelle du vent (donnée météorologique) — "
+    "ne représente ni une prévision ni une zone de propagation"
+)
+
+
+# --------------------------------------------------------------------------- #
+# Helpers de formatage (dates UTC, nombres, directions, listes)               #
+# --------------------------------------------------------------------------- #
+
+def _parse(iso: str) -> datetime:
+    """Parse un horodatage ISO (Z, +00:00, ou espace) en datetime UTC."""
+    s = iso.strip().replace("Z", "+00:00")
+    if " " in s and "T" not in s:
+        s = s.replace(" ", "T", 1)
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
+
+
+def date_fr(iso: str) -> str:
+    """« 22/07/2026 »."""
+    return _parse(iso).strftime("%d/%m/%Y")
+
+
+def heure_utc(iso: str) -> str:
+    """« 12:32 UTC »."""
+    return _parse(iso).strftime("%H:%M UTC")
+
+
+def horodatage(iso: str) -> str:
+    """« 22/07/2026 à 12:32 UTC » — l'unité d'horodatage des phrases (Spec 03 P5)."""
+    return _parse(iso).strftime("%d/%m/%Y à %H:%M UTC")
+
+
+def nombre_fr(x: float, decimals: int = 0) -> str:
+    """Nombre à la française : virgule décimale, espace comme séparateur de milliers."""
+    s = f"{float(x):,.{decimals}f}"          # ex. « 3,400.5 » (format US)
+    return s.replace(",", " ").replace(".", ",")  # → « 3 400,5 »
+
+
+_CARD16 = ("N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+           "S", "SSO", "SO", "OSO", "O", "ONO", "NO", "NNO")
+_CARD8_LONG = {
+    "N": "le nord", "NE": "le nord-est", "E": "l'est", "SE": "le sud-est",
+    "S": "le sud", "SO": "le sud-ouest", "O": "l'ouest", "NO": "le nord-ouest",
+}
+
+
+def cardinal_fr(deg: float, points: int = 16) -> str:
+    """Abréviation cardinale (« OSO »). `points` = 8 ou 16."""
+    if points == 8:
+        idx = int((deg % 360) / 45 + 0.5) % 8
+        return _CARD16[idx * 2]
+    idx = int((deg % 360) / 22.5 + 0.5) % 16
+    return _CARD16[idx]
+
+
+def cardinal_long_fr(deg: float) -> str:
+    """Direction cardinale en toutes lettres, 8 points (« le nord-est »)."""
+    return _CARD8_LONG[cardinal_fr(deg, points=8)]
+
+
+def _liste_fr(items) -> str:
+    """« Le Porge, Lacanau et Lège-Cap-Ferret »."""
+    items = list(items)
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    return f"{', '.join(items[:-1])} et {items[-1]}"
+
+
+# --------------------------------------------------------------------------- #
+# 2.1 — État et cycle de vie                                                  #
+# --------------------------------------------------------------------------- #
+
+_BADGE = {
+    "actif": "Actif",
+    "plus_detecte": "Plus détecté",
+    "fusionne": "Fusionné",
+    "archive": "Archivé",
+}
+
+
+def badge_cycle_de_vie(lifecycle: str) -> str:
+    """Libellé court du badge d'en-tête (Spec 03 §3.1) — reflète le champ lifecycle."""
+    return _BADGE[lifecycle]
+
+
+def libelle_cycle_de_vie(
+    lifecycle: str,
+    *,
+    detecte_dernier_passage: bool | None = None,
+    heure_dernier_passage: str | None = None,
+    heures_depuis: int | None = None,
+    dernier_hotspot: str | None = None,
+) -> str:
+    """Phrase d'état (Spec 03 §2.1). `actif` et `plus_detecte` seulement.
+
+    Pour `archive`, utiliser `bandeau_archive` ; pour `fusionne`, `mention_fusion`.
+    """
+    if lifecycle == "actif":
+        if detecte_dernier_passage:
+            return f"Détecté au dernier passage satellite ({heure_utc(heure_dernier_passage)})"
+        return (
+            f"Aucune détection au dernier passage ({heure_utc(heure_dernier_passage)}) "
+            "— le suivi continue"
+        )
+    if lifecycle == "plus_detecte":
+        return (
+            f"Plus détecté depuis {heures_depuis} heures "
+            f"(dernier hotspot : {horodatage(dernier_hotspot)})"
+        )
+    raise ValueError(
+        f"libelle_cycle_de_vie ne couvre pas '{lifecycle}' "
+        "(voir bandeau_archive / mention_fusion)"
+    )
+
+
+def bandeau_archive(derniere_detection: str) -> str:
+    """Bandeau de fiche archivée (Spec 03 §3.11)."""
+    return f"Feu archivé — dernière détection le {date_fr(derniere_detection)}"
+
+
+def libelle_zone_cellule(state: str, *, t_recent_h: int = 24) -> str:
+    """Libellé d'une cellule selon son état d'ancienneté (Spec 03 §2.1)."""
+    if state == "front_actif":
+        return "Zone détectée au dernier passage"
+    if state == "recent":
+        return f"Zone détectée il y a moins de {t_recent_h} h"
+    if state == "plus_detecte":
+        return f"Zone plus détectée depuis plus de {t_recent_h} h"
+    raise ValueError(f"état de cellule inconnu : {state}")
+
+
+def mention_reprise(date: str) -> str:
+    """`reprise=true` — jamais « reprise du feu » (terme SDIS), on ne l'affirme pas."""
+    return (
+        "Nouvelles détections dans une zone précédemment silencieuse "
+        f"depuis le {date_fr(date)}"
+    )
+
+
+def mention_fusion(liens) -> str:
+    """En-tête d'un feu issu d'une jonction (Spec 03 §3.1). `liens` = libellés des origines."""
+    return f"Issu de la jonction de deux départs distincts ({_liste_fr(liens)})"
+
+
+# --------------------------------------------------------------------------- #
+# 2.2 — Mesures de dynamique                                                  #
+# --------------------------------------------------------------------------- #
+
+def phrase_progression(km: float, bearing_deg: float, *, passage_a: str, passage_b: str) -> str:
+    """Progression du front entre deux passages comparables (Spec 03 §2.2)."""
+    return (
+        f"Le front de détection a progressé d'environ {nombre_fr(km, 1)} km "
+        f"vers {cardinal_long_fr(bearing_deg)} entre le {horodatage(passage_a)} "
+        f"et le {horodatage(passage_b)}"
+    )
+
+
+def phrase_frp(frp: float, *, type_passage: str, date: str) -> str:
+    """Intensité radiative d'un passage, sans comparaison (Spec 03 §2.2)."""
+    return (
+        f"Intensité radiative totale : {nombre_fr(frp)} MW "
+        f"au passage de {type_passage} du {date_fr(date)}"
+    )
+
+
+def phrase_frp_comparee(
+    frp: float, frp_precedent: float, *,
+    type_courant: str, type_precedent: str, date: str,
+) -> str:
+    """FRP comparé au passage comparable précédent (Spec 03 §2.2).
+
+    Garde-fou Spec 02 §6 / Spec 03 §2.2 : **jamais** de comparaison jour↔nuit
+    (sensibilité du capteur). Le générateur refuse le gabarit si les types diffèrent.
+    """
+    if type_courant != type_precedent:
+        raise ValueError(
+            "comparaison FRP interdite entre passages de types différents "
+            f"({type_precedent!r} vs {type_courant!r}) — Spec 03 §2.2"
+        )
+    if frp_precedent > 0:
+        facteur = frp / frp_precedent
+        comp = f"×{nombre_fr(facteur, 1)}" if facteur >= 1 else f"÷{nombre_fr(1 / facteur, 1)}"
+    else:
+        comp = "sans mesure comparable"
+    return (
+        f"Intensité radiative totale : {nombre_fr(frp)} MW au passage de "
+        f"{type_courant} du {date_fr(date)}, contre {nombre_fr(frp_precedent)} MW "
+        f"au passage comparable précédent ({comp})"
+    )
+
+
+def phrase_emprise_estimee(ha: float) -> str:
+    """Emprise satellite estimée — catégorie `estimee` (Spec 03 §2.2, P4)."""
+    return (
+        f"Emprise estimée d'après les détections : environ {nombre_fr(ha)} ha "
+        "(estimation satellite, non officielle)"
+    )
+
+
+def phrase_surface_officielle(ha: float, autorite: str, date: str) -> str:
+    """Surface parcourue annoncée par une autorité — catégorie `declaree` (Spec 03 §2.2)."""
+    return f"Surface parcourue annoncée par {autorite} : {nombre_fr(ha)} ha ({date_fr(date)})"
+
+
+# --------------------------------------------------------------------------- #
+# 2.3 — Vent et direction                                                     #
+# --------------------------------------------------------------------------- #
+
+def phrase_vent(dir_origine_deg: float, v_kmh: float, rafales_kmh: float, *,
+                provider: str, heure: str) -> str:
+    """Observation de vent courante (Spec 03 §2.3). `dir_origine_deg` = d'où vient le vent."""
+    return (
+        f"Vent {cardinal_fr(dir_origine_deg, 16)} {nombre_fr(v_kmh)} km/h, "
+        f"rafales {nombre_fr(rafales_kmh)} km/h — mesure {provider} de {heure_utc(heure)}"
+    )
+
+
+def phrase_vent_communes(dir_origine_deg: float, communes, *, heure: str) -> str:
+    """Fait composé vent + géométrie (Spec 03 §2.3). `communes` = noms dans l'aval du vent."""
+    downwind = (dir_origine_deg + 180.0) % 360.0
+    return (
+        f"Le vent de {heure_utc(heure)} souffle en direction {cardinal_long_fr(downwind)} ; "
+        f"dans cette direction se trouvent {_liste_fr(communes)}"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# 2.4 — Prévisions météorologiques (catégorie `prevue`)                       #
+# --------------------------------------------------------------------------- #
+
+def phrase_prevision(provider: str, model: str, run_heure: str, contenu: str) -> str:
+    """Gabarit unique de prévision (Spec 03 §2.4). Aucune conclusion opérationnelle dérivée."""
+    return f"Prévision {provider}/{model} (run de {heure_utc(run_heure)}) : {contenu}"
+
+
+def contenu_pluie(mm: float, heures: int, proba: int) -> str:
+    """Contenu de prévision de pluie, à passer à `phrase_prevision`."""
+    return f"{nombre_fr(mm)} mm de pluie attendus sur la zone d'ici {heures} h (probabilité {proba} %)"
+
+
+# --------------------------------------------------------------------------- #
+# 2.5 — Sécheresse et danger — barèmes de traduction                          #
+# --------------------------------------------------------------------------- #
+
+_DC_CLASSES = ("faible", "modérée", "élevée", "très élevée")
+_FWI_CLASSES = ("très faible", "faible", "modéré", "élevé", "très élevé", "extrême")
+_SIM_CLASSES = ("très inférieure", "inférieure", "proche", "supérieure")
+_VIGIEAU_NIVEAUX = {
+    "vigilance": "vigilance",
+    "alerte": "alerte",
+    "alerte_renforcee": "alerte renforcée",
+    "crise": "crise",
+}
+
+
+def _classe(valeur: float, seuils, classes) -> str:
+    """Range une valeur dans la classe dont l'indice est le nombre de seuils dépassés."""
+    n = sum(1 for s in seuils if valeur >= s)
+    return classes[n]
+
+
+def classe_dc(dc: float, seuils) -> str:
+    return _classe(dc, seuils, _DC_CLASSES)
+
+
+def phrase_dc(dc: float, seuils) -> str:
+    """Sécheresse profonde du terrain — indice DC (Spec 03 §2.5)."""
+    return f"Sécheresse profonde du terrain : {classe_dc(dc, seuils)}"
+
+
+def classe_fwi(fwi: float, seuils) -> str:
+    return _classe(fwi, seuils, _FWI_CLASSES)
+
+
+def phrase_fwi(fwi: float, date: str, seuils) -> str:
+    """Danger météorologique d'incendie — indice FWI EFFIS (Spec 03 §2.5)."""
+    return (
+        f"Danger météorologique d'incendie ({date_fr(date)}) : "
+        f"{classe_fwi(fwi, seuils)} (indice FWI, Copernicus/EFFIS)"
+    )
+
+
+def phrase_meteo_forets(niveau: str, dept: str, date: str) -> str:
+    """Météo des forêts — classe officielle Météo-France, reprise telle quelle (Spec 03 §2.5)."""
+    return f"Météo des forêts (Météo-France, {date_fr(date)}) : niveau {niveau} pour le département {dept}"
+
+
+def classe_sim(percentile: float, seuils) -> str:
+    return _classe(percentile, seuils, _SIM_CLASSES)
+
+
+def phrase_sim(percentile: float, date: str, seuils) -> str:
+    """Humidité des sols — percentile vs normale saisonnière, indice SIM (Spec 03 §2.5)."""
+    return (
+        f"Humidité des sols : {classe_sim(percentile, seuils)} à la normale de saison "
+        f"(SIM, décade du {date_fr(date)})"
+    )
+
+
+def phrase_vigieau(niveau: str, date_arrete: str) -> str:
+    """Restriction d'eau — citation de l'arrêté, catégorie `declaree` (Spec 03 §2.5)."""
+    lib = _VIGIEAU_NIVEAUX[niveau]
+    return f"Commune en {lib} sécheresse par arrêté préfectoral depuis le {date_fr(date_arrete)}"
+
+
+# --------------------------------------------------------------------------- #
+# 2.6 — Latence et fraîcheur                                                  #
+# --------------------------------------------------------------------------- #
+
+def bloc_latence(derniere_obs: str) -> str:
+    """Bloc standard de latence, sur chaque page (Spec 03 §2.6).
+
+    Le mot « méthodologie » est transformé en lien par le gabarit (le lexique ne
+    porte pas d'URL) ; la phrase reste exacte et lisible sans lien.
+    """
+    return (
+        "Les détections satellitaires parviennent avec un délai de traitement de "
+        "1 à 3 h après le passage ; un départ de feu peut précéder de plusieurs heures "
+        "sa première détection (voir la méthodologie). "
+        f"Dernière observation intégrée : {horodatage(derniere_obs)}."
+    )
+
+
+# --------------------------------------------------------------------------- #
+# 2.7 — Attributions obligatoires                                             #
+# --------------------------------------------------------------------------- #
+
+def bloc_attributions(
+    *,
+    referentiel_millesime: str,
+    meteo: str = "Open-Meteo (CC BY 4.0)",
+    hotspots: bool = True,
+    prometheus: bool = False,
+) -> list[str]:
+    """Lignes d'attribution de pied de page (Spec 03 §2.7).
+
+    `hotspots` : citation NASA FIRMS obligatoire dès qu'un hotspot est affiché/exporté.
+    Aucune formulation ne suggère un endossement par un producteur de données.
+    """
+    lignes: list[str] = []
+    if hotspots:
+        lignes.append("Détections : NASA FIRMS / LANCE / ESDIS (voir le disclaimer)")
+    lignes.append(f"Limites administratives : IGN Admin Express, millésime {referentiel_millesime}")
+    lignes.append(f"Météo : {meteo}")
+    histo = "Historique incendies : BDIFF (min. Agriculture / IGN)"
+    if prometheus:
+        histo += ", Prométhée"
+    lignes.append(histo)
+    return lignes
