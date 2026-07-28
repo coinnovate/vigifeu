@@ -25,6 +25,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from vigifeu.engine import geo
 from vigifeu.engine.cluster import apply_lifecycle
 from vigifeu.engine.overpass import build_overpasses
+from vigifeu.engine.commune_context import refresh_commune_context
 from vigifeu.engine.pipeline import process_cycle
 from vigifeu.engine.regen import enqueue_fire_update
 from vigifeu.engine.relations import fire_footprint_l93
@@ -139,6 +140,20 @@ def main() -> None:
         else:
             ping_healthcheck(os.environ.get("HEALTHCHECK_COLLECTION_URL"))
 
+    def job_commune_context() -> None:
+        # Spec 02 §2 : drought/vigieau quotidiens, par commune concernée par un feu
+        # actif. Activation live derrière flag (config) tant que les formats d'API
+        # ne sont pas vérifiés (cadrage Lot 3) : flag off ⇒ marche à blanc.
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        res = refresh_commune_context(conn, config, valid_date=today)
+        log.info(
+            "contexte communal: %d communes, %d depts (drought=%s, vigieau=%s) — "
+            "vigieau %d, effis %d, meteo_forets %d",
+            res["communes"], res["depts"], res["drought_activated"], res["vigieau_activated"],
+            res["vigieau_inserted"], res["effis_inserted"], res["meteo_forets_inserted"],
+        )
+        ping_healthcheck(os.environ.get("HEALTHCHECK_CONTEXT_URL"))
+
     def job_archive() -> None:
         res = archive_sweep(conn, config)
         log.info(
@@ -170,6 +185,10 @@ def main() -> None:
     scheduler.add_job(
         job_lifecycle, "interval", hours=1,
         id="lifecycle", max_instances=1, coalesce=True,
+    )
+    scheduler.add_job(
+        job_commune_context, "cron", hour=6, minute=0,   # matin (après publication EFFIS/MF)
+        id="commune_context", max_instances=1, coalesce=True,
     )
     scheduler.add_job(
         job_archive, "cron", hour=3, minute=30,   # nuit, hors pics de collecte

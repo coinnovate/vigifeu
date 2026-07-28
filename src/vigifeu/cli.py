@@ -13,6 +13,10 @@
   vigifeu sources                 — sources fixes candidates en attente de revue
   vigifeu confirmer ID [type]     — confirme une source fixe candidate
   vigifeu invalider ID            — rejette une source fixe candidate
+  vigifeu communes-import PATH [--millesime M] [--layer L]
+                                  — importe le référentiel commune (GeoPackage/GeoJSON)
+  vigifeu bdiff-import PATH        — importe l'historique des feux BDIFF (CSV)
+  vigifeu contexte                — tire drought/vigieau des communes concernées (flags config)
 """
 
 from __future__ import annotations
@@ -190,6 +194,50 @@ def cmd_invalider(source_id: int) -> None:
     print(f"source #{source_id} invalidée")
 
 
+def _flag(rest: list[str], name: str) -> str | None:
+    """Extrait --name=valeur ou --name valeur d'une liste d'arguments."""
+    for i, a in enumerate(rest):
+        if a == f"--{name}" and i + 1 < len(rest):
+            return rest[i + 1]
+        if a.startswith(f"--{name}="):
+            return a.split("=", 1)[1]
+    return None
+
+
+def cmd_communes_import(path: str, millesime: str | None, layer: str | None) -> None:
+    from vigifeu.referentiels.communes import import_communes
+
+    conn, _ = _open()
+    m = millesime or datetime.now(UTC).strftime("%Y")
+    res = import_communes(conn, path, millesime=m, layer=layer)
+    print(f"communes importées : {res['imported']} (millésime {res['millesime']})")
+
+
+def cmd_bdiff_import(path: str) -> None:
+    from vigifeu.referentiels.bdiff import import_bdiff
+
+    conn, _ = _open()
+    res = import_bdiff(conn, path)
+    print(
+        f"BDIFF : {res['imported']} feux historiques sur {res['communes_touchees']} communes, "
+        f"{res['skipped_unknown_commune']} ignorés (code INSEE hors référentiel)"
+    )
+
+
+def cmd_contexte() -> None:
+    from vigifeu.engine.commune_context import refresh_commune_context
+
+    conn, config = _open()
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    res = refresh_commune_context(conn, config, valid_date=today)
+    print(
+        f"contexte : {res['communes']} communes concernées, {res['depts']} depts "
+        f"(drought={res['drought_activated']}, vigieau={res['vigieau_activated']}) — "
+        f"vigieau {res['vigieau_inserted']}, effis {res['effis_inserted']}, "
+        f"meteo_forets {res['meteo_forets_inserted']}"
+    )
+
+
 def main() -> None:
     args = sys.argv[1:]
     if not args:
@@ -223,6 +271,12 @@ def main() -> None:
             cmd_confirmer(int(rest[0]), rest[1] if len(rest) > 1 else None)
         case "invalider":
             cmd_invalider(int(rest[0]))
+        case "communes-import":
+            cmd_communes_import(rest[0], _flag(rest, "millesime"), _flag(rest, "layer"))
+        case "bdiff-import":
+            cmd_bdiff_import(rest[0])
+        case "contexte":
+            cmd_contexte()
         case _:
             print(__doc__)
             sys.exit(1)
