@@ -37,6 +37,12 @@ def write_atomic(path: str | Path, content: str) -> Path:
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
             f.write(content)
+        # mkstemp force 0600 (sécurité) et os.replace conserve ce mode : sans correction,
+        # tout fichier généré est illisible par Nginx (www-data) → 403 à chaque régén.
+        # On applique un mode public dérivé de l'umask du process (0644 avec umask 022).
+        cur = os.umask(0)
+        os.umask(cur)
+        os.chmod(tmp, 0o666 & ~cur)
         os.replace(tmp, path)                     # atomique (même répertoire)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
