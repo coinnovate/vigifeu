@@ -331,6 +331,28 @@ def phrase_vent(dir_origine_deg: float, v_kmh: float, rafales_kmh: float, *,
     )
 
 
+def phrase_meteo(*, temp_c=None, rh_pct=None, dir_origine_deg=None, v_kmh=None,
+                 rafales_kmh=None, precip_1h=None, provider: str, heure: str) -> str | None:
+    """Conditions météo observées au centroïde du foyer (Spec 03 §2.3) — factuelles,
+    horodatées, sourcées. Les champs absents sont omis (source dégradée sans bloquer).
+    None si aucune donnée exploitable."""
+    parties: list[str] = []
+    if temp_c is not None:
+        parties.append(f"{nombre_fr(temp_c)} °C")
+    if rh_pct is not None:
+        parties.append(f"humidité {nombre_fr(rh_pct)} %")
+    if dir_origine_deg is not None:
+        vent = f"vent {cardinal_fr(dir_origine_deg, 16)} {nombre_fr(v_kmh or 0)} km/h"
+        if rafales_kmh:
+            vent += f" (rafales {nombre_fr(rafales_kmh)} km/h)"
+        parties.append(vent)
+    if precip_1h is not None:
+        parties.append(f"{nombre_fr(precip_1h)} mm de pluie sur la dernière heure")
+    if not parties:
+        return None
+    return f"Conditions au foyer (mesure {provider} de {heure_fr(heure)}) : {', '.join(parties)}"
+
+
 def phrase_vent_communes(dir_origine_deg: float, communes, *, heure: str) -> str:
     """Fait composé vent + géométrie (Spec 03 §2.3). `communes` = noms dans l'aval du vent."""
     downwind = (dir_origine_deg + 180.0) % 360.0

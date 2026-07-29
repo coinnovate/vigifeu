@@ -161,6 +161,17 @@ def test_phrase_vent():
     )
 
 
+def test_phrase_meteo():
+    p = fr.phrase_meteo(temp_c=32, rh_pct=25, dir_origine_deg=247.5, v_kmh=35, rafales_kmh=60,
+                        precip_1h=0, provider="Open-Meteo", heure="2026-07-24T12:00:00Z")
+    assert p == ("Conditions au foyer (mesure Open-Meteo de 14:00) : "
+                 "32 °C, humidité 25 %, vent OSO 35 km/h (rafales 60 km/h), 0 mm de pluie sur la dernière heure")
+    # champs manquants omis ; None si aucune donnée
+    partiel = fr.phrase_meteo(temp_c=30, provider="Open-Meteo", heure="2026-07-24T12:00:00Z")
+    assert partiel == "Conditions au foyer (mesure Open-Meteo de 14:00) : 30 °C"
+    assert fr.phrase_meteo(provider="x", heure="2026-07-24T12:00:00Z") is None
+
+
 def test_phrase_vent_communes_aval():
     # vent d'ouest (270° d'origine) → souffle vers l'est.
     p = fr.phrase_vent_communes(270, ["Le Porge", "Lacanau"], heure="2026-07-24T12:00:00Z")

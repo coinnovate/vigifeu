@@ -304,10 +304,12 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
         # un trou silencieux) ; « rien à signaler » si armé mais sans donnée.
         "secheresse_indispo": not config["drought"]["activated"],
         "secheresse_meteo_forets": _secheresse_meteo_forets(conn, config, dept),
-        "meteo_obs": (fr.phrase_vent(wobs["wind_dir_deg"], wobs["wind_speed_kmh"] or 0,
-                                     wobs["wind_gusts_kmh"] or 0, provider=wobs["provider"] or "météo",
-                                     heure=wobs["observed_at"])
-                      if wobs and wobs["wind_dir_deg"] is not None else None),
+        "meteo_obs": (fr.phrase_meteo(
+                          temp_c=wobs["temp_c"], rh_pct=wobs["rh_pct"],
+                          dir_origine_deg=wobs["wind_dir_deg"], v_kmh=wobs["wind_speed_kmh"],
+                          rafales_kmh=wobs["wind_gusts_kmh"], precip_1h=wobs["precip_mm_1h"],
+                          provider=wobs["provider"] or "météo", heure=wobs["observed_at"])
+                      if wobs else None),
         "brut": {
             "n_hotspots": _hotspot_count(conn, event_id),
             "n_versions": len(_versions(conn, event_id)),
