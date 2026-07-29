@@ -8,8 +8,13 @@ garantir l'unicité de l'écrivain sous WAL) :
 - gap_check     (horaire) : alerte si trou de collecte > seuil (Spec 02 §9) ;
 - archive_sweep (quotidien, nuit) : export Parquet + purge de la fenêtre glissante.
 
-Chaque tâche pingue son healthcheck sur succès (dead-man switch). Le moteur
-d'interprétation (clustering, qualification…) s'ajoutera ici au Lot 2.
+Le moteur d'interprétation (Lot 2) tourne en fin de cycle fetch. Le générateur
+statique (Lot 4) y est branché au Lot 5 : `run_regen` draine la `regen_queue`
+en cycle court (après fetch/weather/contexte, cible « < 2 min » Spec 04 §3) et
+`finalize_site` reconstruit chaque nuit les artefacts site-level (sitemaps, Atom,
+pages éditoriales, redirections).
+
+Chaque tâche pingue son healthcheck sur succès (dead-man switch).
 """
 
 from __future__ import annotations
@@ -26,11 +31,12 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from vigifeu.engine import geo
 from vigifeu.engine.cluster import apply_lifecycle
 from vigifeu.engine.overpass import build_overpasses
-from vigifeu.engine.commune_context import refresh_commune_context
+from vigifeu.engine.commune_context import concerned_communes, refresh_commune_context
 from vigifeu.engine.pipeline import process_cycle
-from vigifeu.engine.regen import enqueue_fire_update
+from vigifeu.engine.regen import enqueue, enqueue_fire_update
 from vigifeu.engine.relations import fire_footprint_l93
 from vigifeu.engine.wind import recompute_direction_vent
+from vigifeu.generate.runner import consume, finalize_site, sync_static
 from vigifeu.ingest.firms import fetch_cycle, fetch_firms_backfill
 from vigifeu.ingest.weather import fetch_weather_obs
 from vigifeu.model.archive import archive_sweep
@@ -68,6 +74,21 @@ def main() -> None:
         log.info("migrations appliquées: %s", applied)
     sync_satellite_sources(conn, config)
 
+    def run_regen(trigger: str) -> dict:
+        """Draine la regen_queue (Spec 04 §3, « < 2 min après ingestion »). Consomme
+        seul le nécessaire (P2) ; tourne dans le worker unique du scheduler, donc
+        même écrivain que le moteur, aucune concurrence. `finalize_site` (sitemaps,
+        Atom, pages éditoriales) est la passe nocturne, pas ici."""
+        stamp = datetime.now(UTC).isoformat()
+        stats = consume(conn, config, stamp=stamp)
+        if any(stats[k] for k in ("feu", "commune", "carte", "erreurs")):
+            log.info(
+                "regen (%s): %d feux, %d communes, %d carte — %d différées, %d erreurs",
+                trigger, stats["feu"], stats["commune"], stats["carte"],
+                stats["differe"], stats["erreurs"],
+            )
+        return stats
+
     def job_fetch_firms() -> None:
         results = fetch_cycle(conn, config)
         ok = [r for r in results if r["status"] == "ok"]
@@ -93,6 +114,9 @@ def main() -> None:
                 res["created"], res["attached"], res["merged"], res["reprises"],
                 res["requalified"], res["versioned"], res["promoted"],
             )
+            # Étape 9 (Spec 04 §3) : le moteur a alimenté regen_queue → on régénère
+            # les pages impactées dans la foulée (carte + fiches feux/communes).
+            run_regen("cycle")
         if not err:
             ping_healthcheck(os.environ.get("HEALTHCHECK_FIRMS_URL"))
 
@@ -139,6 +163,7 @@ def main() -> None:
                 "weather_obs: %d/%d feux échantillonnés, %d relations direction_vent modifiées",
                 n_ok, len(fires), n_rel,
             )
+            run_regen("weather_obs")  # draine les fiches feux/communes enfilées ci-dessus
         ping_healthcheck(os.environ.get("HEALTHCHECK_WEATHER_URL"))
 
     def job_backfill() -> None:
@@ -168,7 +193,30 @@ def main() -> None:
             res["communes"], res["depts"], res["drought_activated"], res["vigieau_activated"],
             res["vigieau_inserted"], res["effis_inserted"], res["meteo_forets_inserted"],
         )
+        # Spec 04 §3 « Quotidien matin » : le bloc « contexte du jour » (drought/vigieau
+        # fraîchement tirés) régénère les fiches des communes exposées + des feux actifs.
+        stamp = datetime.now(UTC).isoformat()
+        for c in concerned_communes(conn, config):
+            enqueue(conn, "commune", c["code_insee"], stamp=stamp, trigger="contexte")
+        for f in conn.execute(
+            "SELECT id FROM fire_event WHERE lifecycle='actif' "
+            "AND qualification='vegetation_confirme'"
+        ).fetchall():
+            enqueue(conn, "feu", str(f["id"]), stamp=stamp, trigger="contexte")
+        conn.commit()
+        run_regen("contexte")
         ping_healthcheck(os.environ.get("HEALTHCHECK_CONTEXT_URL"))
+
+    def job_finalize_site() -> None:
+        # Passe nocturne (Spec 04 §3) : artefacts « site-level » indépendants de la
+        # regen_queue — pages éditoriales, listes départements, sitemaps, robots,
+        # llms.txt, flux Atom, redirections 301. Reconstruits en entier chaque nuit.
+        stats = finalize_site(conn, config)
+        log.info(
+            "finalize_site: %d pages, %d départements, sitemaps %s, %d redirections",
+            stats["pages"], stats["departements"], stats["sitemaps"], stats["redirects"],
+        )
+        ping_healthcheck(os.environ.get("HEALTHCHECK_FINALIZE_URL"))
 
     def job_archive() -> None:
         res = archive_sweep(conn, config)
@@ -210,6 +258,10 @@ def main() -> None:
         job_archive, "cron", hour=3, minute=30,   # nuit, hors pics de collecte
         id="archive_sweep", max_instances=1, coalesce=True,
     )
+    scheduler.add_job(
+        job_finalize_site, "cron", hour=4, minute=0,   # nuit, après l'archivage
+        id="finalize_site", max_instances=1, coalesce=True,
+    )
 
     def _shutdown(signum, frame):  # noqa: ARG001
         log.info("arrêt demandé (signal %s)", signum)
@@ -220,11 +272,19 @@ def main() -> None:
     signal.signal(signal.SIGINT, _shutdown)
 
     log.info(
-        "démarrage — fetch+moteur immédiat puis toutes les %d min ; "
-        "backfill+gap+cycle de vie horaires ; archive 03h30",
+        "démarrage — fetch+moteur+regen immédiat puis toutes les %d min ; "
+        "backfill+gap+cycle de vie horaires ; archive 03h30 ; contexte 06h00 ; "
+        "finalize_site 04h00",
         config["firms"]["fetch_interval_min"],
     )
-    job_fetch_firms()  # premier cycle sans attendre l'intervalle
+    # Assets statiques + carte-config.js (clé MapTiler depuis l'env) une fois au boot.
+    sync_static(config)
+    job_fetch_firms()  # premier cycle sans attendre l'intervalle (draine déjà si nouveauté)
+    # Vide l'arriéré de regen_queue accumulé (file alimentée depuis le Lot 3 sans
+    # consommateur) puis construit les artefacts site-level, pour que le site soit
+    # complet dès le premier service — avant même le premier cron nocturne.
+    run_regen("démarrage")
+    job_finalize_site()
     scheduler.start()
 
 

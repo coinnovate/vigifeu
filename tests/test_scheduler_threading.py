@@ -84,3 +84,28 @@ def test_make_scheduler_un_seul_worker():
     executor = scheduler._executors["default"]
     # apscheduler.executors.pool.ThreadPoolExecutor enveloppe concurrent.futures.
     assert executor._pool._max_workers == 1
+
+
+def test_chemin_generation_daemon_sur_connexion_cross_thread(tmp_path):
+    """Le chemin exact que le daemon appelle (sync_static → consume → finalize_site)
+    tourne sur une connexion cross_thread, comme en prod. Base vide : on vérifie qu'il
+    n'explose pas et produit un site minimal complet (carte-config, robots, sitemap)."""
+    from vigifeu.generate.runner import consume, finalize_site, sync_static
+    from vigifeu.model.db import connect, load_config, migrate, sync_satellite_sources
+
+    conn = connect(tmp_path / "d.db", cross_thread=True)
+    migrate(conn)
+    config = load_config("config/params.toml")
+    config["generate"]["site_dir"] = str(tmp_path / "site")
+    sync_satellite_sources(conn, config)
+
+    sync_static(config)
+    stats = consume(conn, config, stamp="2026-07-28T00:00:00Z")
+    finalize_site(conn, config)
+
+    out = tmp_path / "site"
+    assert stats["erreurs"] == 0
+    assert (out / "static" / "carte-config.js").exists()
+    assert (out / "robots.txt").exists()
+    assert list(out.glob("sitemap*.xml")), "aucun sitemap produit"
+    conn.close()
