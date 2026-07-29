@@ -62,13 +62,23 @@ def _handle_commune(conn, config, env, page_ref, site_dir) -> Path | None:
     return write_atomic(page_path(site_dir, "commune", f"{page_ref}-{row['slug']}"), html)
 
 
-def _handle_carte(conn, config, env, page_ref, site_dir) -> Path:
-    """Génère la carte nationale (accueil) + son GeoJSON `/feux.geojson`."""
+def write_carte(conn, config, env, site_dir) -> Path:
+    """Écrit la carte nationale (accueil `index.html`) + son GeoJSON `/feux.geojson`.
+
+    Fonction pure de l'état courant (liste des feux publiés non archivés). Appelée par le
+    handler de file (mise à jour événementielle) ET par `finalize_site` (rafraîchissement
+    systématique) : la page d'accueil étant un agrégat, elle ne doit jamais rester périmée
+    quand la file ne la ré-enfile pas (déploiement, passage d'un feu en archive)."""
     ctx = load_carte_context(conn, config)
-    path = write_atomic(page_path(site_dir, "carte", page_ref), render_carte(env, ctx))
+    path = write_atomic(page_path(site_dir, "carte", "carte"), render_carte(env, ctx))
     gj = json.dumps(national_geojson(conn, config), ensure_ascii=False)
     write_atomic(Path(site_dir) / "feux.geojson", gj)
     return path
+
+
+def _handle_carte(conn, config, env, page_ref, site_dir) -> Path:
+    """Handler de file pour le type `carte` (mise à jour événementielle)."""
+    return write_carte(conn, config, env, site_dir)
 
 
 _HANDLERS = {
@@ -92,6 +102,9 @@ def finalize_site(conn: sqlite3.Connection, config: dict, env: Environment | Non
     """Artefacts « site-level » (Spec 04 §3, passe nocturne) : pages éditoriales, sitemaps,
     robots, llms.txt, flux Atom, redirections 301. Régénérés en fin de build."""
     env = env or make_env(config["generate"]["templates_dir"])
+    # La carte (accueil) est un agrégat : on la régénère systématiquement ici pour qu'elle
+    # ne reste jamais périmée quand la file ne la ré-enfile pas (déploiement, archivage).
+    write_carte(conn, config, env, config["generate"]["site_dir"])
     stats = {
         "pages": build_static_pages(conn, config, env),
         "departements": build_departements(conn, config, env),

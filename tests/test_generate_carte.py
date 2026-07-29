@@ -23,7 +23,7 @@ from vigifeu.engine.overpass import build_overpasses
 from vigifeu.engine.pipeline import process_cycle
 from vigifeu.engine.regen import CARTE_REF, enqueue
 from vigifeu.engine.relations import invalidate_commune_index
-from vigifeu.generate.runner import consume, sync_static
+from vigifeu.generate.runner import consume, finalize_site, sync_static
 from vigifeu.model.db import connect, load_config, migrate, sync_satellite_sources
 from vigifeu.referentiels.communes import import_communes
 
@@ -97,3 +97,15 @@ def test_consume_publie_tous_les_feux_confirmes(build_carte_avant_feux):
         "WHERE qualification='vegetation_confirme' AND public_id IS NULL"
     ).fetchone()[0]
     assert reste == 0, "des feux confirmés restent sans public_id après consume"
+
+
+def test_finalize_site_regenere_la_carte(build_carte_avant_feux):
+    """finalize_site rafraîchit l'accueil même si la file ne le ré-enfile pas (déploiement)."""
+    conn, config, out = build_carte_avant_feux
+    idx = Path(out) / "index.html"
+    idx.write_text("CARTE PERIMEE", encoding="utf-8")  # simule un accueil stale post-deploy
+    conn.execute("DELETE FROM regen_queue")  # file vide : seule finalize_site peut le refaire
+    conn.commit()
+    finalize_site(conn, config)
+    html = idx.read_text(encoding="utf-8")
+    assert "/feux/" in html, "finalize_site n'a pas régénéré la carte d'accueil"
