@@ -18,6 +18,7 @@
 {% if og_image %}<meta property="og:image" content="{{ base_url }}{{ og_image }}">
 <meta name="twitter:card" content="summary_large_image">{% endif %}
 <link rel="stylesheet" href="/static/css/vigifeu.css">
+{% if analytics.get('umami_src') %}<script defer src="{{ analytics.umami_src }}" data-website-id="{{ analytics.umami_website_id }}"></script>{% endif %}
 {% if jsonld %}<script type="application/ld+json">{{ jsonld|safe }}</script>{% endif %}
 {% block extra_head %}{% endblock %}
 </head>

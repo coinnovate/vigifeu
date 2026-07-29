@@ -148,6 +148,22 @@ referentiel_millesime = "2026"         # millésime Admin Express affiché en at
 carte_style = "maptiler-raster"
 maptiler_map = "dataviz"                # fond sobre (clair) — ne concurrence pas les cellules du feu
 
+[analytics]
+# Mesure d'audience sans cookie (RGPD, cadrage §15) — Umami auto-hébergé. Le website-id
+# n'est pas un secret (il apparaît dans le HTML de chaque page). Vide = pas de script.
+umami_src = "https://umami.actimeo.fr/script.js"
+umami_website_id = "aa8dc8b7-690c-49b9-8053-9fb7d7759c1d"
+
+[legal]
+# Mentions légales (affichées sur /mentions-legales/). Jamais en dur dans le gabarit.
+editeur = "Sébastien Kicin"
+editeur_adresse = "Matthias Claudius Weg 1, 69181 Leimen, Allemagne"
+editeur_email = "contact@sentifeu.fr"
+directeur_publication = "Sébastien Kicin"
+hebergeur = "Hetzner Online GmbH"
+hebergeur_adresse = "Industriestr. 25, 91710 Gunzenhausen, Allemagne"
+hebergeur_url = "https://www.hetzner.com"
+
 [lexique]
 # Barèmes de traduction versionnés (Spec 03 §2.5 / Spec 01 §3.5) — traduisent une
 # valeur brute d'indice en classe verbale, le chiffre restant en second niveau (P1).

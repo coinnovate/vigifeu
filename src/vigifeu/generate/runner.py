@@ -101,7 +101,7 @@ def sync_static(config: dict) -> None:
 def finalize_site(conn: sqlite3.Connection, config: dict, env: Environment | None = None) -> dict:
     """Artefacts « site-level » (Spec 04 §3, passe nocturne) : pages éditoriales, sitemaps,
     robots, llms.txt, flux Atom, redirections 301. Régénérés en fin de build."""
-    env = env or make_env(config["generate"]["templates_dir"])
+    env = env or make_env(config["generate"]["templates_dir"], analytics=config.get("analytics"))
     # La carte (accueil) est un agrégat : on la régénère systématiquement ici pour qu'elle
     # ne reste jamais périmée quand la file ne la ré-enfile pas (déploiement, archivage).
     write_carte(conn, config, env, config["generate"]["site_dir"])
@@ -142,7 +142,7 @@ def consume(conn: sqlite3.Connection, config: dict, *, stamp: str,
     type n'est pas encore câblé reste en file (comptée `differe`). Une erreur de rendu
     est isolée (comptée `erreurs`, tracée sur stderr) et ne bloque pas le lot.
     """
-    env = env or make_env(config["generate"]["templates_dir"])
+    env = env or make_env(config["generate"]["templates_dir"], analytics=config.get("analytics"))
     site_dir = config["generate"]["site_dir"]
     sql = "SELECT id, page_type, page_ref FROM regen_queue WHERE processed_at IS NULL ORDER BY id"
     if limit:

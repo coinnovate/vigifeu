@@ -2,16 +2,51 @@
 {% block content %}
 <article class="page mentions">
 <h1>Mentions légales</h1>
+
 <section>
 <h2>Éditeur</h2>
-<p>{{ marque }} — coordonnées de l'éditeur à compléter avant la mise en ligne publique.</p>
+<p>{{ marque }} est édité par {{ legal.editeur }}.</p>
+<p>{{ legal.editeur_adresse }}<br>
+Contact : <a href="mailto:{{ legal.editeur_email }}">{{ legal.editeur_email }}</a></p>
+<p>Directeur de la publication : {{ legal.directeur_publication }}.</p>
 </section>
+
 <section>
 <h2>Hébergeur</h2>
-<p>Coordonnées de l'hébergeur à compléter.</p>
+<p>{{ legal.hebergeur }}<br>
+{{ legal.hebergeur_adresse }}<br>
+<a href="{{ legal.hebergeur_url }}" rel="noopener">{{ legal.hebergeur_url }}</a></p>
 </section>
+
 <section>
-<h2>Données et attributions</h2>
+<h2>Propriété intellectuelle</h2>
+<p>La présentation, les libellés et les gabarits du site sont la propriété de l'éditeur.
+Les données affichées proviennent de sources publiques créditées sur chaque page et
+restent soumises à leurs licences respectives. La réutilisation des faits publiés est
+encouragée en citant la date d'observation et le lien de la page.</p>
+</section>
+
+<section>
+<h2>Données personnelles et mesure d'audience</h2>
+<p>{{ marque }} ne demande aucune inscription et ne collecte aucune donnée personnelle
+identifiante. La fréquentation est mesurée avec <strong>Umami</strong>, une solution
+auto-hébergée <strong>sans cookie</strong> et sans traceur publicitaire : seules des
+statistiques agrégées et anonymes (pages vues, provenance) sont produites, sans profilage
+ni transfert à des tiers.</p>
+<p>Pour toute question relative aux données, écrivez à
+<a href="mailto:{{ legal.editeur_email }}">{{ legal.editeur_email }}</a>.</p>
+</section>
+
+<section>
+<h2>Nature du service et responsabilité</h2>
+<p>{{ marque }} est un outil de <strong>veille</strong> satellitaire, <strong>pas un
+système d'alerte</strong> : voir les <a href="/cgu/">conditions d'utilisation</a>.
+L'absence de détection ne signifie pas l'absence de feu ni de risque. En cas de danger,
+référez-vous aux autorités compétentes (préfecture, SDIS, mairie) et aux numéros d'urgence.</p>
+</section>
+
+<section>
+<h2>Sources et attributions</h2>
 <p>Les sources de données et leurs licences sont détaillées sur la
 <a href="/methodologie/">page méthodologie</a>. Aucune formulation du site ne suggère
 un endossement par un producteur de données.</p>

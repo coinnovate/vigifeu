@@ -14,7 +14,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
 
-def make_env(templates_dir: str | Path) -> Environment:
+def make_env(templates_dir: str | Path, *, analytics: dict | None = None) -> Environment:
     env = Environment(
         loader=FileSystemLoader(str(templates_dir)),
         autoescape=select_autoescape(["html", "xml"]),
@@ -23,4 +23,7 @@ def make_env(templates_dir: str | Path) -> Environment:
         lstrip_blocks=True,
         keep_trailing_newline=True,
     )
+    # Mesure d'audience (Umami, sans cookie) injectée dans toutes les pages via le gabarit
+    # de base. Global (pas dans chaque contexte de page). Vide {} = aucun script émis.
+    env.globals["analytics"] = analytics or {}
     return env

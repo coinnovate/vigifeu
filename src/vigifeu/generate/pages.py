@@ -69,6 +69,7 @@ def build_static_pages(conn: sqlite3.Connection, config: dict, env: Environment)
     ctx = _base_ctx(config, slug="mentions-legales", title="Mentions légales",
                     description="Éditeur, hébergeur et sources de données du site.",
                     graph=jsonld.render_graph(org))
+    ctx["legal"] = config.get("legal", {})
     write_atomic(site / "mentions-legales" / "index.html", env.get_template("mentions.html.j2").render(**ctx))
     n += 1
 
