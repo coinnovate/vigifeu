@@ -100,11 +100,14 @@ def test_pages_departements_generees(site):
     dept33 = Path(site) / "departements" / "33" / "index.html"
     assert dept33.exists()
     page = dept33.read_text(encoding="utf-8")
-    assert "Incendies dans le département 33" in page
+    assert "Incendies en Gironde" in page              # nom du département (SEO), pas « département 33 »
     assert "/communes/33503-saumos/" in page          # commune du périmètre
     assert "/feux/2026-saumos/" in page                # feu suivi du département
-    # présent au sitemap
-    assert "/departements/33/" in (Path(site) / "sitemap-pages.xml").read_text(encoding="utf-8")
+    # index départements généré + index ET page dept au sitemap
+    assert (Path(site) / "departements" / "index.html").exists()
+    smp = (Path(site) / "sitemap-pages.xml").read_text(encoding="utf-8")
+    assert "/departements/</loc>" in smp        # l'index /departements/
+    assert "/departements/33/" in smp           # la page du département
 
 
 def test_maplibre_exclu_du_budget_mais_present(site):

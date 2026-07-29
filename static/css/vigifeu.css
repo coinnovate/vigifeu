@@ -96,6 +96,8 @@ footer.pied { margin-top: 2.5rem; border-top: 3px solid transparent; border-imag
 footer.pied h2 { font-size: 1rem; border: 0; color: var(--marine); }
 .latence { background: var(--fond-doux); border-left: 3px solid var(--orange); padding: .6rem .8rem; border-radius: .3rem; }
 .note-heure { font-size: .8rem; color: var(--gris); margin: .4rem 0; }
+.pied-nav { margin: .2rem 0 .8rem; line-height: 2; }
+.code-dept { color: var(--gris); font-weight: 400; }
 
 @media (prefers-color-scheme: dark) {
   :root {

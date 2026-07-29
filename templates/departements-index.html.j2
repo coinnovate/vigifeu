@@ -1,0 +1,17 @@
+{% extends "base.html.j2" %}
+{#
+  Index des départements (Spec 04 §5) — racine de crawl stable vers tout l'arbre
+  communes, indépendante des feux actifs. Contenu complet sans JS.
+#}
+{% block content %}
+<article class="page departements-index">
+<h1>Incendies par département</h1>
+<p>Parcourez les communes concernées et les feux de végétation suivis, département par
+département, pour toute la France.</p>
+<ul class="colonnes">
+{% for d in departements %}
+<li><a href="{{ d.href }}">{{ d.nom }} <span class="code-dept">({{ d.code }})</span></a></li>
+{% endfor %}
+</ul>
+</article>
+{% endblock %}

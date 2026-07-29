@@ -54,7 +54,8 @@ def build_sitemaps(conn: sqlite3.Connection, config: dict) -> dict:
     from vigifeu.generate.departement import depts_du_perimetre
 
     pages = [(f"{base}/", None), (f"{base}/methodologie/", None),
-             (f"{base}/mentions-legales/", None), (f"{base}/cgu/", None)]
+             (f"{base}/mentions-legales/", None), (f"{base}/cgu/", None),
+             (f"{base}/departements/", None)]
     pages += [(f"{base}/departements/{d}/", None) for d in depts_du_perimetre(conn)]
 
     write_atomic(site / "sitemap-feux.xml", _urlset(feux))

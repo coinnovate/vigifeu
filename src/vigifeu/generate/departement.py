@@ -15,6 +15,7 @@ from jinja2 import Environment
 
 from vigifeu.generate import jsonld, og
 from vigifeu.generate.writer import write_atomic
+from vigifeu.lexique import fr
 
 
 def _lieu(public_id: str) -> str:
@@ -45,26 +46,51 @@ def load_departement_context(conn: sqlite3.Connection, config: dict, dept: str) 
                 "JOIN commune c ON c.code_insee = r.code_insee "
                 "WHERE c.dept=? AND f.public_id IS NOT NULL "
                 "ORDER BY f.public_id", (dept,))]
+    nom = fr.nom_departement(dept)
     canonical_path = f"/departements/{dept}/"
     place = {"@type": "AdministrativeArea", "@id": f"{gen['base_url']}{canonical_path}#place",
-             "name": f"Département {dept}",
-             "url": f"{gen['base_url']}{canonical_path}"}
+             "name": nom, "url": f"{gen['base_url']}{canonical_path}"}
     return {
         "base_url": gen["base_url"],
         "marque": gen["marque"],
         "canonical_path": canonical_path,
         "og_image": og.og_path(dept),
         "jsonld": jsonld.render_graph(jsonld.organization(gen["base_url"], gen["marque"]), place),
-        "page_title": f"Incendies dans le département {dept} — communes et feux suivis | {gen['marque']}",
-        "page_description": f"Communes concernées et feux de végétation suivis dans le département {dept}.",
+        "page_title": f"Incendies en {nom} ({dept}) — communes et feux suivis | {gen['marque']}",
+        "page_description": f"Communes concernées et feux de végétation suivis en {nom} (département {dept}).",
         "fil_ariane": [{"label": "Accueil", "href": "/"},
-                       {"label": f"Département {dept}", "href": None}],
+                       {"label": "Départements", "href": "/departements/"},
+                       {"label": nom, "href": None}],
         "dept": dept,
+        "nom_dept": nom,
         "communes": communes,
         "feux": feux,
         "latence_texte": None,
         "attributions": [],
     }
+
+
+def build_departements_index(conn: sqlite3.Connection, config: dict, env: Environment) -> int:
+    """Page index `/departements/` : liste TOUS les départements du périmètre. Racine de
+    crawl stable vers l'arbre communes, indépendante des feux actifs (navigation d'hiver)."""
+    gen = config["generate"]
+    depts = [{"code": d, "nom": fr.nom_departement(d), "href": f"/departements/{d}/"}
+             for d in depts_du_perimetre(conn)]
+    ctx = {
+        "base_url": gen["base_url"], "marque": gen["marque"],
+        "canonical_path": "/departements/",
+        "og_image": og.og_path(None),
+        "jsonld": jsonld.render_graph(jsonld.organization(gen["base_url"], gen["marque"])),
+        "page_title": f"Incendies par département — carte des feux de végétation en France | {gen['marque']}",
+        "page_description": "Parcourir les incendies de végétation par département : communes "
+                            "concernées, feux suivis et historique, pour toute la France.",
+        "fil_ariane": [{"label": "Accueil", "href": "/"}, {"label": "Départements", "href": None}],
+        "departements": depts,
+        "latence_texte": None, "attributions": [],
+    }
+    write_atomic(Path(gen["site_dir"]) / "departements" / "index.html",
+                 env.get_template("departements-index.html.j2").render(**ctx))
+    return len(depts)
 
 
 def build_departements(conn: sqlite3.Connection, config: dict, env: Environment) -> int:
@@ -75,4 +101,5 @@ def build_departements(conn: sqlite3.Connection, config: dict, env: Environment)
         ctx = load_departement_context(conn, config, dept)
         write_atomic(site / "departements" / dept / "index.html", tmpl.render(**ctx))
         n += 1
+    build_departements_index(conn, config, env)   # + la page index /departements/
     return n

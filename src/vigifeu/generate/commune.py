@@ -151,9 +151,10 @@ def load_commune_context(conn: sqlite3.Connection, config: dict, code_insee: str
     if commune["obligation_debroussaillement"]:
         reglementaire.append("Obligations légales de débroussaillement en vigueur")
 
-    fil = [{"label": "Accueil", "href": "/"}]
+    fil = [{"label": "Accueil", "href": "/"},
+           {"label": "Départements", "href": "/departements/"}]
     if dept:
-        fil.append({"label": f"Département {dept}", "href": f"/departements/{dept}/"})
+        fil.append({"label": fr.nom_departement(dept), "href": f"/departements/{dept}/"})
     fil.append({"label": commune["nom"], "href": None})
 
     # « depuis 1973 » réservé aux communes Prométhée (arc méditerranéen) ; « depuis 2006 »

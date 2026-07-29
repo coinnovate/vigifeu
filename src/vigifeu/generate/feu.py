@@ -281,6 +281,8 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
         "page_description": description,
         "fil_ariane": [
             {"label": "Accueil", "href": "/"},
+            {"label": "Départements", "href": "/departements/"},
+            *([{"label": fr.nom_departement(dept), "href": f"/departements/{dept}/"}] if dept else []),
             {"label": nom, "href": None},
         ],
         "nom": nom,
