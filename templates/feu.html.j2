@@ -79,7 +79,7 @@
 <section class="chronologie">
 <h2>Chronologie des passages</h2>
 <table>
-<thead><tr><th>Horodatage (donnée)</th><th>Passage</th><th>Hotspots</th><th>Intensité radiative</th></tr></thead>
+<thead><tr><th>Heure (donnée)</th><th>Passage</th><th>Points chauds</th><th>Puissance thermique</th></tr></thead>
 <tbody>
 {% for l in chronologie %}
 <tr><td>{{ l.at }}</td><td>{{ l.type }}</td><td>{{ l.n_hotspots }}</td>
@@ -116,7 +116,7 @@
 <h2>Données brutes</h2>
 <details>
 <summary>Détections et export</summary>
-<p>{{ brut.n_hotspots }} hotspots enregistrés · {{ brut.n_versions }} versions du feu.</p>
+<p>{{ brut.n_hotspots }} points chauds enregistrés · {{ brut.n_versions }} versions du feu.</p>
 <p><a href="{{ brut.geojson_href }}">Télécharger le GeoJSON du feu</a></p>
 </details>
 </section>

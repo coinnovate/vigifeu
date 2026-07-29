@@ -74,8 +74,8 @@ def test_contexte_entete(saumos_archive):
     assert ctx["nom"].startswith("Feu de Saumos")
     assert ctx["badge_cycle"]["classe"] == "archive"
     assert ctx["bandeau_archive"].startswith("Feu archivé — dernière détection le")
-    # première détection contractuelle (jalon L2/L3)
-    assert ctx["first_acq"] == "22/07/2026 à 11:55 UTC"
+    # première détection contractuelle (jalon L2/L3) — 11:55 UTC = 13:55 heure de Paris
+    assert ctx["first_acq"] == "22/07/2026 à 13:55"
 
 
 def test_synthese_citable(saumos_archive):
@@ -131,7 +131,7 @@ def test_lint_lexique_aucun_terme_interdit(html):
 def test_aucun_horodatage_de_generation(html):
     """Garde-fou §9.5 : seule l'heure de la donnée apparaît, jamais l'heure de génération."""
     _, page = html
-    # toutes les heures affichées portent « UTC » (données) ; pas de fuseau local ni de « généré le »
+    # seule l'heure de la DONNÉE apparaît (en heure locale de Paris) ; jamais de « généré le »
     assert "généré" not in page.lower()
     assert "generated" not in page.lower()
 

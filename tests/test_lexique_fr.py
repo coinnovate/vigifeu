@@ -14,12 +14,12 @@ from vigifeu.lexique import fr
 
 # --- helpers de formatage ---------------------------------------------------
 
-def test_horodatage_utc_variantes():
-    assert fr.horodatage("2026-07-22T12:32:00Z") == "22/07/2026 à 12:32 UTC"
-    assert fr.horodatage("2026-07-22 12:32:00") == "22/07/2026 à 12:32 UTC"
-    assert fr.horodatage("2026-07-22T12:32:00+00:00") == "22/07/2026 à 12:32 UTC"
+def test_horodatage_variantes():
+    assert fr.horodatage("2026-07-22T12:32:00Z") == "22/07/2026 à 14:32"
+    assert fr.horodatage("2026-07-22 12:32:00") == "22/07/2026 à 14:32"
+    assert fr.horodatage("2026-07-22T12:32:00+00:00") == "22/07/2026 à 14:32"
     assert fr.date_fr("2026-07-22T11:55:00Z") == "22/07/2026"
-    assert fr.heure_utc("2026-07-22T11:55:00Z") == "11:55 UTC"
+    assert fr.heure_fr("2026-07-22T11:55:00Z") == "13:55"
 
 
 def test_nombre_fr():
@@ -52,12 +52,12 @@ def test_libelle_cycle_de_vie_actif():
     assert (
         fr.libelle_cycle_de_vie("actif", detecte_dernier_passage=True,
                                 heure_dernier_passage="2026-07-24T02:10:00Z")
-        == "Détecté au dernier passage satellite (02:10 UTC)"
+        == "Détecté au dernier passage satellite (04:10)"
     )
     assert (
         fr.libelle_cycle_de_vie("actif", detecte_dernier_passage=False,
                                 heure_dernier_passage="2026-07-24T02:10:00Z")
-        == "Aucune détection au dernier passage (02:10 UTC) — le suivi continue"
+        == "Aucune détection au dernier passage (04:10) — le suivi continue"
     )
 
 
@@ -65,7 +65,7 @@ def test_libelle_cycle_de_vie_plus_detecte():
     assert (
         fr.libelle_cycle_de_vie("plus_detecte", heures_depuis=30,
                                 dernier_hotspot="2026-07-25T13:40:00Z")
-        == "Plus détecté depuis 30 heures (dernier hotspot : 25/07/2026 à 13:40 UTC)"
+        == "Plus détecté depuis 30 heures (dernier point chaud : 25/07/2026 à 15:40)"
     )
 
 
@@ -119,14 +119,14 @@ def test_phrase_progression():
         fr.phrase_progression(5.9, 0, passage_a="2026-07-24T02:00:00Z",
                               passage_b="2026-07-25T02:00:00Z")
         == "Le front de détection a progressé d'environ 5,9 km vers le nord "
-           "entre le 24/07/2026 à 02:00 UTC et le 25/07/2026 à 02:00 UTC"
+           "entre le 24/07/2026 à 04:00 et le 25/07/2026 à 04:00"
     )
 
 
 def test_phrase_frp_et_comparee():
     assert (
         fr.phrase_frp(285, type_passage="nuit", date="2026-07-24T02:00:00Z")
-        == "Intensité radiative totale : 285 MW au passage de nuit du 24/07/2026"
+        == "Puissance thermique (FRP) : 285 mégawatts au passage de nuit du 24/07/2026"
     )
     p = fr.phrase_frp_comparee(28, 285, type_courant="nuit", type_precedent="nuit",
                                date="2026-07-25T02:00:00Z")
@@ -157,14 +157,14 @@ def test_phrase_emprise_et_surface():
 def test_phrase_vent():
     assert (
         fr.phrase_vent(247.5, 35, 60, provider="Open-Meteo", heure="2026-07-24T12:00:00Z")
-        == "Vent OSO 35 km/h, rafales 60 km/h — mesure Open-Meteo de 12:00 UTC"
+        == "Vent OSO 35 km/h, rafales 60 km/h — mesure Open-Meteo de 14:00"
     )
 
 
 def test_phrase_vent_communes_aval():
     # vent d'ouest (270° d'origine) → souffle vers l'est.
     p = fr.phrase_vent_communes(270, ["Le Porge", "Lacanau"], heure="2026-07-24T12:00:00Z")
-    assert p == ("Le vent de 12:00 UTC souffle en direction l'est ; "
+    assert p == ("Le vent de 14:00 souffle en direction l'est ; "
                  "dans cette direction se trouvent Le Porge et Lacanau")
 
 
@@ -179,7 +179,7 @@ def test_phrase_prevision():
     contenu = fr.contenu_pluie(12, 48, 70)
     assert (
         fr.phrase_prevision("Open-Meteo", "AROME", "2026-07-24T06:00:00Z", contenu)
-        == "Prévision Open-Meteo/AROME (run de 06:00 UTC) : "
+        == "Prévision Open-Meteo/AROME (run de 08:00) : "
            "12 mm de pluie attendus sur la zone d'ici 48 h (probabilité 70 %)"
     )
 
@@ -248,7 +248,7 @@ def test_commune_situation():
     assert (
         fr.commune_aucun_feu("2026-07-28T05:00:00Z")
         == "Aucun incendie suivi actuellement sur la commune ou à moins de 20 km "
-           "(dernière observation satellite : 28/07/2026 à 05:00 UTC)"
+           "(dernière observation satellite : 28/07/2026 à 07:00)"
     )
     assert fr.commune_relation_emprise("Saumos") == "L'incendie de Saumos a une emprise sur la commune"
     assert (fr.commune_relation_distance("Saumos", 3.4)
@@ -274,7 +274,7 @@ def test_commune_historique_et_intervalles():
 def test_bloc_latence():
     p = fr.bloc_latence("2026-07-24T12:00:00Z")
     assert "délai de traitement de 1 à 3 h" in p
-    assert "Dernière observation intégrée : 24/07/2026 à 12:00 UTC." in p
+    assert "Dernière observation intégrée : 24/07/2026 à 14:00." in p
 
 
 def test_bloc_attributions():

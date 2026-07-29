@@ -15,8 +15,8 @@ from vigifeu.lexique.fr import TERMES_INTERDITS
 # pour les définir (« “plus détecté” n'est pas “éteint” »). Elle est donc exclue du lint.
 EXCLUS_LINT = ("methodologie",)
 
-# Marqueurs d'un horodatage de génération (interdits §9.5) — seule l'heure de la donnée
-# (toujours suffixée « UTC ») a le droit d'apparaître.
+# Marqueurs d'un horodatage de génération (interdits §9.5) — seule l'heure de la DONNÉE
+# (en heure locale de Paris) a le droit d'apparaître, jamais l'heure du build.
 MARQUEURS_GENERATION = ("généré le", "generated on", "date de génération", "build time")
 
 

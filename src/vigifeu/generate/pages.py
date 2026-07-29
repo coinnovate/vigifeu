@@ -18,7 +18,7 @@ from vigifeu.generate.writer import write_atomic
 # Définitions des libellés — reprises telles quelles dans la FAQ visible ET le JSON-LD.
 FAQ_LIBELLES: list[tuple[str, str]] = [
     ("Que signifie « plus détecté » ?",
-     "Qu'aucun hotspot n'a été détecté depuis plusieurs heures. Ce n'est pas « éteint » : "
+     "Qu'aucun point chaud n'a été détecté depuis plusieurs heures. Ce n'est pas « éteint » : "
      "un feu peut ne plus émettre de signal thermique détectable tout en restant actif au sol. "
      "Seules les autorités qualifient un feu de maîtrisé ou éteint."),
     ("Que signifie « aucune détection au dernier passage » ?",

@@ -6,9 +6,10 @@ complète, datée et sourçable** (Spec 03 P1/P2). Règles transversales appliqu
 * **P4 — la catégorie de donnée est visible.** `mesuree` sans qualificatif ;
   `estimee` porte « estimation »/« estimé » ; `prevue` porte « Prévision {source} » ;
   `declaree` cite l'acte. Ces marqueurs sont dans les gabarits ci-dessous.
-* **P5 — l'horodatage affiché est en UTC.** Les fonctions rendent l'heure absolue
-  UTC ; les durées relatives (« il y a 3 h ») sont une surcouche JS côté client,
-  hors lexique.
+* **P5 — l'horodatage affiché est en heure locale française (Paris).** Les fonctions
+  localisent l'instant de la donnée pour le grand public ; la donnée reste en UTC en base
+  et dans le JSON-LD (citable par les machines). Les durées relatives (« il y a 3 h »)
+  sont une surcouche JS côté client, hors lexique.
 * **Interdits absolus** (cadrage §4.1, Spec 03 §2.3/§2.1) : aucune de ces fonctions
   ne produit « zone menacée », « propagation estimée », « sera touché », « éteint »,
   « maîtrisé » (hors citation `declaree`)… Le lint CI (Spec 04 §9.1) le vérifie sur
@@ -22,6 +23,11 @@ contractuels et vivent ici.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
+
+# Heure AFFICHÉE = heure locale française (Europe/Paris) — les données restent en UTC
+# en base et dans le JSON-LD (citable par les machines). Décision Lot 5 (accessibilité).
+_PARIS = ZoneInfo("Europe/Paris")
 
 # Termes proscrits (source unique du lint lexique, Spec 04 §9.1 / cadrage §4.1).
 # « maîtrisé »/« fixé »/« éteint » ne sont admis QUE dans une citation `declaree`
@@ -62,19 +68,27 @@ def _parse(iso: str) -> datetime:
     return dt.astimezone(UTC)
 
 
+def _local(iso: str) -> datetime:
+    """Le même instant, exprimé en heure locale française (Europe/Paris)."""
+    return _parse(iso).astimezone(_PARIS)
+
+
 def date_fr(iso: str) -> str:
-    """« 22/07/2026 »."""
-    return _parse(iso).strftime("%d/%m/%Y")
+    """« 22/07/2026 » (jour local français)."""
+    return _local(iso).strftime("%d/%m/%Y")
 
 
-def heure_utc(iso: str) -> str:
-    """« 12:32 UTC »."""
-    return _parse(iso).strftime("%H:%M UTC")
+def heure_fr(iso: str) -> str:
+    """« 14:32 » — heure locale française (Paris), sans suffixe."""
+    return _local(iso).strftime("%H:%M")
 
 
 def horodatage(iso: str) -> str:
-    """« 22/07/2026 à 12:32 UTC » — l'unité d'horodatage des phrases (Spec 03 P5)."""
-    return _parse(iso).strftime("%d/%m/%Y à %H:%M UTC")
+    """« 22/07/2026 à 14:32 » — heure locale (Paris) ; l'unité d'horodatage des phrases.
+
+    Les données restent en UTC en base et dans le JSON-LD ; seul l'affichage est localisé
+    (Spec 03 P5 : l'heure affichée est celle de la donnée, désormais en heure française)."""
+    return _local(iso).strftime("%d/%m/%Y à %H:%M")
 
 
 def nombre_fr(x: float, decimals: int = 0) -> str:
@@ -146,15 +160,15 @@ def libelle_cycle_de_vie(
     """
     if lifecycle == "actif":
         if detecte_dernier_passage:
-            return f"Détecté au dernier passage satellite ({heure_utc(heure_dernier_passage)})"
+            return f"Détecté au dernier passage satellite ({heure_fr(heure_dernier_passage)})"
         return (
-            f"Aucune détection au dernier passage ({heure_utc(heure_dernier_passage)}) "
+            f"Aucune détection au dernier passage ({heure_fr(heure_dernier_passage)}) "
             "— le suivi continue"
         )
     if lifecycle == "plus_detecte":
         return (
             f"Plus détecté depuis {heures_depuis} heures "
-            f"(dernier hotspot : {horodatage(dernier_hotspot)})"
+            f"(dernier point chaud : {horodatage(dernier_hotspot)})"
         )
     raise ValueError(
         f"libelle_cycle_de_vie ne couvre pas '{lifecycle}' "
@@ -222,9 +236,9 @@ def phrase_progression(km: float, bearing_deg: float, *, passage_a: str, passage
 
 
 def phrase_frp(frp: float, *, type_passage: str, date: str) -> str:
-    """Intensité radiative d'un passage, sans comparaison (Spec 03 §2.2)."""
+    """Puissance thermique d'un passage (mesure FRP), sans comparaison (Spec 03 §2.2)."""
     return (
-        f"Intensité radiative totale : {nombre_fr(frp)} MW "
+        f"Puissance thermique (FRP) : {nombre_fr(frp)} mégawatts "
         f"au passage de {type_passage} du {date_fr(date)}"
     )
 
@@ -249,7 +263,7 @@ def phrase_frp_comparee(
     else:
         comp = "sans mesure comparable"
     return (
-        f"Intensité radiative totale : {nombre_fr(frp)} MW au passage de "
+        f"Puissance thermique (FRP) : {nombre_fr(frp)} MW au passage de "
         f"{type_courant} du {date_fr(date)}, contre {nombre_fr(frp_precedent)} MW "
         f"au passage comparable précédent ({comp})"
     )
@@ -277,7 +291,7 @@ def phrase_vent(dir_origine_deg: float, v_kmh: float, rafales_kmh: float, *,
     """Observation de vent courante (Spec 03 §2.3). `dir_origine_deg` = d'où vient le vent."""
     return (
         f"Vent {cardinal_fr(dir_origine_deg, 16)} {nombre_fr(v_kmh)} km/h, "
-        f"rafales {nombre_fr(rafales_kmh)} km/h — mesure {provider} de {heure_utc(heure)}"
+        f"rafales {nombre_fr(rafales_kmh)} km/h — mesure {provider} de {heure_fr(heure)}"
     )
 
 
@@ -285,7 +299,7 @@ def phrase_vent_communes(dir_origine_deg: float, communes, *, heure: str) -> str
     """Fait composé vent + géométrie (Spec 03 §2.3). `communes` = noms dans l'aval du vent."""
     downwind = (dir_origine_deg + 180.0) % 360.0
     return (
-        f"Le vent de {heure_utc(heure)} souffle en direction {cardinal_long_fr(downwind)} ; "
+        f"Le vent de {heure_fr(heure)} souffle en direction {cardinal_long_fr(downwind)} ; "
         f"dans cette direction se trouvent {_liste_fr(communes)}"
     )
 
@@ -296,7 +310,7 @@ def phrase_vent_communes(dir_origine_deg: float, communes, *, heure: str) -> str
 
 def phrase_prevision(provider: str, model: str, run_heure: str, contenu: str) -> str:
     """Gabarit unique de prévision (Spec 03 §2.4). Aucune conclusion opérationnelle dérivée."""
-    return f"Prévision {provider}/{model} (run de {heure_utc(run_heure)}) : {contenu}"
+    return f"Prévision {provider}/{model} (run de {heure_fr(run_heure)}) : {contenu}"
 
 
 def contenu_pluie(mm: float, heures: int, proba: int) -> str:
@@ -395,7 +409,7 @@ def commune_relation_vent(nom: str, heure: str) -> str:
     """Relation active `direction_vent` (Spec 03 §4.2) — fait composé, double horodatage."""
     return (
         f"La commune se trouve dans la direction actuelle du vent par rapport "
-        f"à l'incendie de {nom} (vent de {heure_utc(heure)})"
+        f"à l'incendie de {nom} (vent de {heure_fr(heure)})"
     )
 
 
@@ -455,7 +469,7 @@ def bloc_attributions(
 ) -> list[str]:
     """Lignes d'attribution de pied de page (Spec 03 §2.7).
 
-    `hotspots` : citation NASA FIRMS obligatoire dès qu'un hotspot est affiché/exporté.
+    `hotspots` : citation NASA FIRMS obligatoire dès qu'un point chaud est affiché/exporté.
     Aucune formulation ne suggère un endossement par un producteur de données.
     """
     lignes: list[str] = []

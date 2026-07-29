@@ -89,10 +89,10 @@ def write_llms(config: dict) -> Path:
 
 {m} publie, pour chaque feu suivi et chaque commune, des énoncés dérivés directement des
 données (détections satellitaires NASA FIRMS, référentiels IGN, historique BDIFF), avec
-leur horodatage en UTC et leur source.
+leur horodatage (affiché en heure locale de Paris ; UTC dans le JSON-LD) et leur source.
 
 ## Sémantique des libellés
-- « plus détecté » : aucun hotspot depuis plusieurs heures — n'est PAS « éteint ».
+- « plus détecté » : aucun point chaud depuis plusieurs heures — n'est PAS « éteint ».
 - « aucune détection au dernier passage » : inférence, pas une observation directe.
 - « emprise estimée » : estimation satellite non officielle.
 - {m} n'emploie jamais « menacé », « propagation estimée », « sera touché ».
@@ -103,7 +103,7 @@ leur horodatage en UTC et leur source.
 - Historique : BDIFF. Restrictions d'eau : VigiEau. Danger : Copernicus/EFFIS, Météo-France.
 
 ## Citation
-Citer avec la date d'observation (UTC) et le lien de la page.
+Citer avec la date d'observation (heure de Paris ; UTC précis dans le JSON-LD) et le lien de la page.
 """
     return write_atomic(Path(gen["site_dir"]) / "llms.txt", txt)
 
