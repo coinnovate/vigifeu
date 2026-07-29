@@ -136,6 +136,16 @@ def consume(conn: sqlite3.Connection, config: dict, *, stamp: str,
         sql += f" LIMIT {int(limit)}"
     rows = conn.execute(sql).fetchall()
 
+    # Pré-passe : assigner le public_id de TOUS les feux de ce lot AVANT tout rendu.
+    # Sinon la carte (enfilée une seule fois, donc traitée tôt) et les fiches communes
+    # sont rendues avant l'assignation paresseuse faite dans _handle_feu — elles voient
+    # un public_id encore NULL et la carte, qui liste `public_id IS NOT NULL`, ressort
+    # vide (« aucun feu suivi ») au premier build. ensure_public_id est idempotent.
+    for row in rows:
+        if row["page_type"] == "feu":
+            ensure_public_id(conn, int(row["page_ref"]))
+    conn.commit()
+
     stats = {"feu": 0, "commune": 0, "carte": 0, "differe": 0, "erreurs": 0}
     for row in rows:
         handler = _HANDLERS.get(row["page_type"])
