@@ -41,10 +41,22 @@ def config_hash(config: dict, sections: tuple[str, ...] = _HASHED_SECTIONS) -> s
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:12]
 
 
-def connect(db_path: str | Path) -> sqlite3.Connection:
-    """Connexion configurée : WAL, foreign keys, timeout généreux."""
+def connect(db_path: str | Path, *, cross_thread: bool = False) -> sqlite3.Connection:
+    """Connexion configurée : WAL, foreign keys, timeout généreux.
+
+    `cross_thread=False` (défaut) garde la garde stricte de sqlite3 (`check_same_thread`) :
+    la connexion n'est utilisable que depuis le thread qui l'a créée. C'est ce qu'il faut
+    pour la CLI et les tests, mono-thread.
+
+    `cross_thread=True` est réservé au **daemon scheduler** : APScheduler exécute ses
+    jobs planifiés dans un thread worker (pas le thread principal qui a ouvert la
+    connexion), donc la garde stricte y ferait échouer toute écriture planifiée
+    (`ProgrammingError`). Le daemon la relâche ET sérialise ses jobs dans un unique
+    worker (`make_scheduler`, executor à 1 thread) pour préserver l'invariant « un seul
+    écrivain SQLite » du plan §1.1 : relâcher la garde sans la sérialisation serait faux.
+    """
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path, timeout=60)
+    conn = sqlite3.connect(db_path, timeout=60, check_same_thread=not cross_thread)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")

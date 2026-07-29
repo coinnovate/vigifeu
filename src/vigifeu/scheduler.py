@@ -20,6 +20,7 @@ import signal
 import sys
 from datetime import UTC, datetime
 
+from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from vigifeu.engine import geo
@@ -39,6 +40,18 @@ from vigifeu.model.monitoring import check_collection_gap, ping_healthcheck
 log = logging.getLogger("vigifeu")
 
 
+def make_scheduler() -> BlockingScheduler:
+    """Scheduler du daemon : UN SEUL worker, donc tous les jobs sérialisés dans un
+    unique thread. C'est l'invariant « un seul écrivain SQLite » du plan §1.1 rendu
+    effectif — deux jobs ne peuvent jamais écrire en même temps. Couplé à
+    `connect(cross_thread=True)`, ça supprime le `ProgrammingError` cross-thread
+    d'APScheduler (les jobs planifiés tournent hors du thread principal)."""
+    return BlockingScheduler(
+        timezone="UTC",
+        executors={"default": ThreadPoolExecutor(max_workers=1)},
+    )
+
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -46,7 +59,10 @@ def main() -> None:
         stream=sys.stdout,  # journald récupère stdout sous systemd
     )
     config = load_config(os.environ.get("VIGIFEU_CONFIG", "config/params.toml"))
-    conn = connect(config["general"]["db_path"])
+    # cross_thread=True : les jobs planifiés tournent dans le worker d'APScheduler,
+    # pas ce thread principal ; make_scheduler (1 worker) garantit qu'ils restent
+    # sérialisés, donc écrivain unique préservé.
+    conn = connect(config["general"]["db_path"], cross_thread=True)
     applied = migrate(conn)
     if applied:
         log.info("migrations appliquées: %s", applied)
@@ -163,7 +179,7 @@ def main() -> None:
         )
         ping_healthcheck(os.environ.get("HEALTHCHECK_ARCHIVE_URL"))
 
-    scheduler = BlockingScheduler(timezone="UTC")
+    scheduler = make_scheduler()
     scheduler.add_job(
         job_fetch_firms, "interval",
         minutes=config["firms"]["fetch_interval_min"],
