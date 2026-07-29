@@ -16,6 +16,9 @@ Type=simple
 User=vigifeu
 WorkingDirectory=/opt/vigifeu
 EnvironmentFile=/opt/vigifeu/.env
+# Le générateur écrit le site statique servi par Nginx (www-data). UMask=0022 rend
+# fichiers (644) et dossiers (755) lisibles par tous — sinon 403 après chaque régen.
+UMask=0022
 ExecStart=/opt/vigifeu/.venv/bin/python -m vigifeu.scheduler
 Restart=always
 RestartSec=30
