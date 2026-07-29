@@ -107,12 +107,31 @@ def reset_interpretation(conn: sqlite3.Connection, config: dict) -> None:
     """Efface toute l'interprétation et reconstruit les passages (P2, rejeu).
 
     Les observations (hotspot_raw) et le registre fixed_source (semi-manuel) sont
-    conservés ; seules les colonnes d'interprétation et les tables dérivées sont
-    remises à zéro. Un `process_cycle` ensuite reconstruit tout à l'identique.
+    conservés ; seules les colonnes d'interprétation et les tables dérivées d'un feu
+    sont remises à zéro. Un `process_cycle` ensuite reconstruit tout à l'identique.
+
+    Détacher/supprimer TOUT ce qui référence fire_event est indispensable, sinon la
+    contrainte FK saute (le bug ne sortait pas tant que le daemon n'écrivait rien — cf.
+    fix threading Lot 5 ; désormais `hotspot_raw.fire_event_id` et `weather_obs` sont
+    peuplés). On coupe l'enforcement le temps du wipe (ordre et auto-références
+    indifférents), puis un `foreign_key_check` garantit qu'aucune orpheline ne subsiste.
     """
-    for table in ("fe_hotspot", "fire_event_version", "fire_cell_state",
-                  "fe_fe_rel", "fe_commune_rel", "fire_event"):
-        conn.execute(f"DELETE FROM {table}")
-    conn.execute("UPDATE hotspot_raw SET fire_event_id=NULL, fixed_source_id=NULL")
-    conn.commit()
+    conn.commit()  # aucune transaction ouverte : PRAGMA foreign_keys serait ignoré sinon
+    conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        # Observations conservées : on ne coupe que leur lien vers l'interprétation effacée.
+        conn.execute("UPDATE hotspot_raw SET fire_event_id=NULL, fixed_source_id=NULL")
+        conn.execute("UPDATE geo_detection_raw SET confirmed_by_fire_event_id=NULL")
+        # Interprétation + dérivées d'un feu (la météo a fire_event_id NOT NULL donc n'est
+        # pas NULLable → supprimée ; elle sera rééchantillonnée au prochain cycle).
+        conn.execute("DELETE FROM weather_forecast WHERE fire_event_id IS NOT NULL")
+        for table in ("fe_hotspot", "weather_obs", "fire_event_version",
+                      "fire_cell_state", "fe_fe_rel", "fe_commune_rel", "fire_event"):
+            conn.execute(f"DELETE FROM {table}")
+        conn.commit()
+    finally:
+        conn.execute("PRAGMA foreign_keys=ON")
+    orphelines = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if orphelines:
+        raise RuntimeError(f"reset_interpretation : références orphelines restantes {orphelines}")
     rebuild_overpasses(conn, config)
