@@ -55,6 +55,12 @@ def make_scheduler() -> BlockingScheduler:
     return BlockingScheduler(
         timezone="UTC",
         executors={"default": ThreadPoolExecutor(max_workers=1)},
+        # Avec 1 seul worker, les jobs se sérialisent : quand fetch_firms (fetch+moteur+
+        # regen, ~1 min) tourne, les jobs du même tick (weather_obs, sur le même intervalle
+        # de 15 min) attendent. Le misfire_grace_time par défaut d'APScheduler (1 s) les
+        # ABANDONNERAIT (« missed ») → weather_obs jamais exécuté. On le rend généreux (1 h)
+        # + coalesce pour qu'un job en retard s'exécute une fois dès que le worker se libère.
+        job_defaults={"coalesce": True, "misfire_grace_time": 3600},
     )
 
 

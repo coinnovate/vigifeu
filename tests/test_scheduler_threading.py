@@ -86,6 +86,15 @@ def test_make_scheduler_un_seul_worker():
     assert executor._pool._max_workers == 1
 
 
+def test_make_scheduler_misfire_genereux():
+    """Un job en attente derrière le worker unique ne doit PAS être abandonné (« missed ») :
+    misfire_grace_time généreux + coalesce, sinon weather_obs (même tick que fetch_firms)
+    est systématiquement sauté."""
+    scheduler = make_scheduler()
+    assert scheduler._job_defaults["misfire_grace_time"] >= 600
+    assert scheduler._job_defaults["coalesce"] is True
+
+
 def test_chemin_generation_daemon_sur_connexion_cross_thread(tmp_path):
     """Le chemin exact que le daemon appelle (sync_static → consume → finalize_site)
     tourne sur une connexion cross_thread, comme en prod. Base vide : on vérifie qu'il
