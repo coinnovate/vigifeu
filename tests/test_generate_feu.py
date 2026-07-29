@@ -167,11 +167,35 @@ def test_commune_historique_liste_le_feu_suivi(commune_html):
     assert "/feux/2026-saumos/" in page
 
 
-def test_commune_contexte_secheresse_degrade(commune_html):
-    ctx, page = commune_html
-    # drought non armé → bloc dégradé (P6), pas un trou silencieux
+def test_commune_contexte_secheresse_degrade(saumos_archive):
+    # Mode dégradé (P6) : drought non armé → « momentanément indisponible », jamais un
+    # trou silencieux. On force le flag off (le défaut prod est désormais armé).
+    conn, config, _ = saumos_archive
+    cfg = {**config, "drought": {**config["drought"], "activated": False}}
+    ctx = load_commune_context(conn, cfg, SAUMOS)
+    page = render_commune(make_env(cfg["generate"]["templates_dir"]), ctx)
     assert ctx["contexte"]["secheresse_indispo"] is True
     assert "momentanément indisponible" in page
+
+
+def test_feu_secheresse_meteo_forets_affiche(saumos_archive):
+    # Armé + donnée présente → la fiche feu affiche le danger Météo des forêts du dept,
+    # pas la section vide ni le message dégradé. Insère + nettoie (fixture partagée).
+    conn, config, saumos_id = saumos_archive
+    conn.execute(
+        "INSERT INTO drought_obs (indicator, dept, valid_date, value, value_class, provider, fetched_at) "
+        "VALUES ('meteo_forets', '33', '2026-07-27', 3, '3', 'meteo-france', '2026-07-27T06:00:00Z')"
+    )
+    conn.commit()
+    try:
+        ctx = load_fire_context(conn, config, saumos_id)
+        page = render_feu(make_env(config["generate"]["templates_dir"]), ctx)
+        assert ctx["secheresse_indispo"] is False
+        assert ctx["secheresse_meteo_forets"] and "Météo des forêts" in page
+        assert "momentanément indisponible" not in page
+    finally:
+        conn.execute("DELETE FROM drought_obs WHERE indicator='meteo_forets' AND dept='33'")
+        conn.commit()
 
 
 def test_commune_structure_lint_et_marque(commune_html):

@@ -78,6 +78,10 @@ def test_flag_off_marche_a_blanc(db, monkeypatch):
 def test_flag_on_orchestre(db, monkeypatch):
     conn, config = db
     _scenario(conn)
+    # On teste l'orchestration des DEUX sources : on arme les sous-flags (EFFIS est off
+    # par défaut en config prod car son WMS n'est pas recâblé).
+    config["drought"]["effis_activated"] = True
+    config["drought"]["meteo_forets_activated"] = True
     v, effis, mf = [], [], []
     monkeypatch.setattr(commune_context, "fetch_vigieau",
                         lambda conn, cfg, code, **k: v.append(code) or {"inserted": 1})

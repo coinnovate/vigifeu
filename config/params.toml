@@ -113,15 +113,18 @@ retry_wait_max_s = 60
 provider = "vigieau"
 
 [drought]
-# ACTIVATION LIVE derrière flag (cadrage Lot 3) : formats EFFIS/Météo des forêts
-# non encore vérifiés (hypothèses documentées, lot1). Orchestration câblée+testée ;
-# passer à true après vérification live.
-activated = false
-# EFFIS (FWI + sous-indices, point de grille) et Météo des forêts (danger
-# départemental, value_class officielle). Catégories mesuree/estimee — Spec 01 §3.5.
-# HYPOTHÈSES DE FORMAT (à vérifier live) documentées dans ingest/drought.py.
-effis_url = "https://ies-ows.jrc.ec.europa.eu/effis/fwi"       # à confirmer
-meteo_forets_url = "https://public-api.meteofrance.fr/meteo-des-forets"  # à confirmer
+# Activation par source (cadrage Lot 3). Master `activated` + sous-flags par source :
+# une source non vérifiée reste off pour ne pas ralentir le cycle (retries).
+activated = true
+meteo_forets_activated = true   # Météo des forêts : API DPMeteoForets v1 vérifiée live (clé apikey)
+effis_activated = false         # EFFIS : en réalité un WMS, à recâbler (Lot 3) — laissé off
+# EFFIS (FWI + sous-indices, point de grille) et Météo des forêts (danger départemental,
+# niveau officiel 1..4). Catégories mesuree/estimee — Spec 01 §3.5.
+effis_url = "https://ies-ows.jrc.ec.europa.eu/effis/fwi"       # à confirmer (WMS)
+# Météo des forêts (DonnéesPubliques DPMeteoForets v1) : clé API en en-tête `apikey`, lue
+# dans l'environnement (VIGIFEU_METEOFRANCE_KEY), jamais ici. Débit Unlimited.
+meteo_forets_url = "https://public-api.meteofrance.fr/public/DPMeteoForets/v1/carte/departement/encours"
+meteo_forets_echeance = "J1"    # danger prévu J+1 (le produit est J+1/J+2, pas J0)
 timeout_s = 30
 max_retries = 3
 retry_wait_min_s = 5

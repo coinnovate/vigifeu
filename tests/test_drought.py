@@ -37,22 +37,47 @@ def test_effis_indices_partiels(db, monkeypatch):
     assert r["inserted"] == 2
 
 
-def test_meteo_forets_value_class(db, monkeypatch):
+# Réponse réelle de DPMeteoForets v1 (vérifiée live) : liste par département.
+MF_JSON = [{"reference_time": "2026-07-28T14:50:04Z", "dep_code": "33",
+            "niveau_j1": "3", "niveau_j2": "4", "dep_nom": "Gironde"}]
+
+
+def test_meteo_forets_niveau(db, monkeypatch):
     conn, config = db
-    monkeypatch.setattr(drought, "_fetch_json", lambda *a, **k: {"value_class": "rouge", "value": 4})
-    r = drought.fetch_meteo_forets(conn, config, dept="33", valid_date="2026-07-22")
-    assert r["status"] == "ok" and r["inserted"] == 1
+    monkeypatch.setenv("VIGIFEU_METEOFRANCE_KEY", "test-token")
+    monkeypatch.setattr(drought, "_fetch_json", lambda *a, **k: MF_JSON)
+    r = drought.fetch_meteo_forets(conn, config, dept="33", valid_date="2026-07-29")
+    assert r["status"] == "ok" and r["inserted"] == 1 and r["echeance"] == "J1"
     row = conn.execute("SELECT * FROM drought_obs WHERE indicator='meteo_forets'").fetchone()
-    assert row["value_class"] == "rouge"
+    assert row["value_class"] == "3" and row["value"] == 3.0  # niveau_j1
     assert row["dept"] == "33"
     assert row["code_insee"] is None and row["lat"] is None  # maille département
 
 
+def test_meteo_forets_echeance_j2(db, monkeypatch):
+    conn, config = db
+    config["drought"]["meteo_forets_echeance"] = "J2"
+    monkeypatch.setenv("VIGIFEU_METEOFRANCE_KEY", "test-token")
+    monkeypatch.setattr(drought, "_fetch_json", lambda *a, **k: MF_JSON)
+    drought.fetch_meteo_forets(conn, config, dept="33", valid_date="2026-07-29")
+    row = conn.execute("SELECT value_class FROM drought_obs WHERE indicator='meteo_forets'").fetchone()
+    assert row["value_class"] == "4"  # niveau_j2
+
+
+def test_meteo_forets_sans_cle_degrade(db, monkeypatch):
+    conn, config = db
+    monkeypatch.delenv("VIGIFEU_METEOFRANCE_KEY", raising=False)
+    r = drought.fetch_meteo_forets(conn, config, dept="33", valid_date="2026-07-29")
+    assert r["status"] == "error" and "METEOFRANCE" in r["error"]
+    assert conn.execute("SELECT COUNT(*) AS n FROM drought_obs").fetchone()["n"] == 0
+
+
 def test_meteo_forets_anti_doublon(db, monkeypatch):
     conn, config = db
-    monkeypatch.setattr(drought, "_fetch_json", lambda *a, **k: {"value_class": "orange"})
-    drought.fetch_meteo_forets(conn, config, dept="33", valid_date="2026-07-22")
-    r2 = drought.fetch_meteo_forets(conn, config, dept="33", valid_date="2026-07-22")
+    monkeypatch.setenv("VIGIFEU_METEOFRANCE_KEY", "test-token")
+    monkeypatch.setattr(drought, "_fetch_json", lambda *a, **k: MF_JSON)
+    drought.fetch_meteo_forets(conn, config, dept="33", valid_date="2026-07-29")
+    r2 = drought.fetch_meteo_forets(conn, config, dept="33", valid_date="2026-07-29")
     assert r2["inserted"] == 0
 
 

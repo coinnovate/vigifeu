@@ -114,6 +114,23 @@ def _nom_et_dept(public_id, relations):
     return lieu, dept, annee
 
 
+def _secheresse_meteo_forets(conn, config, dept):
+    """Phrase du danger Météo des forêts pour le département du feu (dernier connu).
+
+    None si drought non armé (le template affiche alors le mode dégradé) ou si aucune
+    donnée n'est encore tombée pour ce département (template : « rien à signaler »)."""
+    if not config["drought"]["activated"] or not dept:
+        return None
+    row = conn.execute(
+        "SELECT value_class, valid_date FROM drought_obs "
+        "WHERE indicator='meteo_forets' AND dept=? ORDER BY valid_date DESC LIMIT 1",
+        (dept,),
+    ).fetchone()
+    if not row or not row["value_class"]:
+        return None
+    return fr.phrase_meteo_forets(row["value_class"], dept, row["valid_date"])
+
+
 # --------------------------------------------------------------------------- #
 # Assemblage du contexte                                                      #
 # --------------------------------------------------------------------------- #
@@ -280,9 +297,11 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
         "communes_groupes": _groupes_communes(relations, _REL_PRINCIPAUX),
         "communes_groupes_eloignes": _groupes_communes(relations, _REL_ELOIGNES),
         "chronologie": _chronologie(conn, config, event_id),
-        # Contexte sécheresse en mode dégradé tant que [drought].activated est faux
-        # (Spec 03 P6 : l'absence de donnée est une information, pas un trou silencieux).
+        # Contexte sécheresse : danger Météo des forêts du département (armé) ; dégradé
+        # tant que [drought].activated est faux (Spec 03 P6 : l'absence est une info, pas
+        # un trou silencieux) ; « rien à signaler » si armé mais sans donnée.
         "secheresse_indispo": not config["drought"]["activated"],
+        "secheresse_meteo_forets": _secheresse_meteo_forets(conn, config, dept),
         "meteo_obs": (fr.phrase_vent(wobs["wind_dir_deg"], wobs["wind_speed_kmh"] or 0,
                                      wobs["wind_gusts_kmh"] or 0, provider=wobs["provider"] or "météo",
                                      heure=wobs["observed_at"])

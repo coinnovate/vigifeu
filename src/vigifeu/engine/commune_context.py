@@ -77,16 +77,20 @@ def refresh_commune_context(
             ).get("inserted", 0)
 
     if d_on:
-        for c in communes:
-            if c["centroid_lat"] is None or c["centroid_lon"] is None:
-                continue
-            res["effis_inserted"] += fetch_effis_fwi(
-                conn, config, lat=c["centroid_lat"], lon=c["centroid_lon"],
-                valid_date=valid_date, code_insee=c["code_insee"],
-            ).get("inserted", 0)
-        for dept in depts:
-            res["meteo_forets_inserted"] += fetch_meteo_forets(
-                conn, config, dept=dept, valid_date=valid_date,
-            ).get("inserted", 0)
+        # Sous-flags par source : EFFIS (WMS non recâblé) reste off pour ne pas subir
+        # ses retries à chaque cycle ; Météo des forêts est câblé (clé apikey).
+        if config["drought"].get("effis_activated", True):
+            for c in communes:
+                if c["centroid_lat"] is None or c["centroid_lon"] is None:
+                    continue
+                res["effis_inserted"] += fetch_effis_fwi(
+                    conn, config, lat=c["centroid_lat"], lon=c["centroid_lon"],
+                    valid_date=valid_date, code_insee=c["code_insee"],
+                ).get("inserted", 0)
+        if config["drought"].get("meteo_forets_activated", True):
+            for dept in depts:
+                res["meteo_forets_inserted"] += fetch_meteo_forets(
+                    conn, config, dept=dept, valid_date=valid_date,
+                ).get("inserted", 0)
 
     return res

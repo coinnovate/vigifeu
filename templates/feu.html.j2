@@ -102,8 +102,12 @@
 {# 3.8 Contexte sécheresse — mode dégradé tant que la source n'est pas armée (P6) #}
 <section class="secheresse">
 <h2>Contexte sécheresse</h2>
+{% if secheresse_meteo_forets %}<p>{{ secheresse_meteo_forets }}.</p>{% endif %}
 {% if secheresse_indispo %}
 <p class="indispo">Contexte sécheresse momentanément indisponible (source en cours d'intégration).</p>
+{% endif %}
+{% if not secheresse_indispo and not secheresse_meteo_forets %}
+<p>Aucune alerte sécheresse départementale en cours (Météo des forêts).</p>
 {% endif %}
 </section>
 
