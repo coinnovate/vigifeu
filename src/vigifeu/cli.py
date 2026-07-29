@@ -19,6 +19,7 @@
                                   — importe l'historique BDIFF (CSV, cumulatif ; --replace efface d'abord)
   vigifeu contexte                — tire drought/vigieau des communes concernées (flags config)
   vigifeu generer [--limit N]     — régénère les pages en attente dans regen_queue (Lot 4)
+  vigifeu rebuild                 — régénère TOUT le HTML (après un changement de gabarit)
 """
 
 from __future__ import annotations
@@ -251,6 +252,33 @@ def cmd_generer(limit: int | None) -> None:
         print(f"  ⚠ horodatage de génération : {v['marqueur']} dans {v['file']}", file=sys.stderr)
 
 
+def cmd_rebuild() -> None:
+    """Régénère TOUT le HTML du site (après un changement de gabarit/lexique).
+
+    Ré-enfile tous les feux publiés + communes du périmètre + carte, puis génère.
+    Ne recopie pas les assets (CSS/logo/carte-config) : un changement de CSS s'applique
+    sans régénération, et les assets sont rafraîchis par le déploiement (sync_static au
+    boot, avec la clé MapTiler). À lancer daemon arrêté (écrivain unique)."""
+    from vigifeu.engine.regen import CARTE_REF, enqueue
+    from vigifeu.generate.runner import consume, finalize_site
+
+    conn, config = _open()
+    stamp = datetime.now(UTC).isoformat()
+    n = enqueue(conn, "carte", CARTE_REF, stamp=stamp, trigger="rebuild")
+    for f in conn.execute("SELECT id FROM fire_event WHERE public_id IS NOT NULL"):
+        n += enqueue(conn, "feu", str(f["id"]), stamp=stamp, trigger="rebuild")
+    for c in conn.execute("SELECT DISTINCT code_insee FROM fe_commune_rel"):
+        n += enqueue(conn, "commune", c["code_insee"], stamp=stamp, trigger="rebuild")
+    conn.commit()
+    stats = consume(conn, config, stamp=stamp)
+    site = finalize_site(conn, config)
+    print(
+        f"rebuild : {n} pages ré-enfilées → {stats['feu']} feux, {stats['commune']} communes, "
+        f"{stats['carte']} carte, {stats['erreurs']} erreurs ; {site['pages']} pages, "
+        f"{site['departements']} départements, sitemaps {site['sitemaps']} → {config['generate']['site_dir']}"
+    )
+
+
 def cmd_contexte() -> None:
     from vigifeu.engine.commune_context import refresh_commune_context
 
@@ -306,6 +334,8 @@ def main() -> None:
             cmd_contexte()
         case "generer":
             cmd_generer(int(_flag(rest, "limit")) if _flag(rest, "limit") else None)
+        case "rebuild":
+            cmd_rebuild()
         case _:
             print(__doc__)
             sys.exit(1)
