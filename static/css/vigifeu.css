@@ -22,6 +22,7 @@
   --ancien: #8a93a3;       /* plus_detecte — gris bleuté */
   --lien: var(--marine);
   --largeur: 44rem;
+  color-scheme: light;   /* UI navigateur (barres, contrôles) en clair — pas de fond sombre */
 }
 
 * { box-sizing: border-box; }
@@ -62,6 +63,20 @@ h2 { font-size: 1.15rem; margin: 1.6rem 0 .5rem; color: var(--marine); border-bo
 
 .bandeau { background: var(--fond-doux); border-left: 4px solid var(--orange); padding: .7rem 1rem; margin: 1rem 0; }
 
+/* Bandeau d'indicateurs (fiche feu) — tuiles colorées par sévérité (état, pas prédiction).
+   Fond légèrement teinté + liseré ; le mot de niveau accompagne toujours la couleur. */
+.indicateurs { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: .6rem; margin: 1rem 0 1.4rem; }
+.indic { border: 1px solid var(--trait); border-left: 5px solid var(--st-b); background: var(--st-bg); border-radius: .4rem; padding: .55rem .7rem; }
+.indic .lab { display: block; font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; color: var(--gris); }
+.indic .val { display: block; font-size: 1.35rem; font-weight: 700; color: var(--marine); line-height: 1.15; margin: .12rem 0; }
+.indic .niv { display: inline-flex; align-items: center; gap: .35rem; font-size: .82rem; font-weight: 600; color: var(--st-b); }
+.indic .niv::before { content: ""; width: .55rem; height: .55rem; border-radius: 50%; background: var(--st-b); flex: none; }
+.indic.faible   { --st-b: #2f7d4f; --st-bg: #eaf5ee; }
+.indic.modere   { --st-b: #b5790f; --st-bg: #fbf3e0; }
+.indic.eleve    { --st-b: #d9660f; --st-bg: #fdeee2; }
+.indic.critique { --st-b: #e01e1e; --st-bg: #fdecea; }
+.indic.neutre   { --st-b: var(--marine); --st-bg: #f0f3f8; }
+
 .synthese p { margin: .5rem 0; }
 .synthese { font-size: 1.05rem; }
 
@@ -99,10 +114,4 @@ footer.pied h2 { font-size: 1rem; border: 0; color: var(--marine); }
 .pied-nav { margin: .2rem 0 .8rem; line-height: 2; }
 .code-dept { color: var(--gris); font-weight: 400; }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --marine: #9fb6e6; --marine-clair: #c2d2ee;   /* bleu clair lisible sur fond sombre */
-    --encre: #e7ebf2; --papier: #141821; --gris: #9aa4b4; --trait: #2c3444; --fond-doux: #1c2230;
-    --ancien: #7f8aa0; --vert: #6fca90; --vert-doux: #17251c;
-  }
-}
+/* Thème clair uniquement (fond blanc) — cohérent avec le logo et la lisibilité voulue. */

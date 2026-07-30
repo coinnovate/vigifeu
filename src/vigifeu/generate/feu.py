@@ -15,6 +15,7 @@ from shapely import wkt
 
 from vigifeu.engine import version
 from vigifeu.generate import jsonld, og
+from vigifeu.generate.indicateurs import indicateurs_feu
 from vigifeu.lexique import fr
 
 _DN = {"D": "jour", "N": "nuit"}
@@ -275,6 +276,21 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
 
     synthese = _synthese(conn, config, fire, latest, relations)
     wobs = _latest_weather(conn, event_id)
+
+    # Bandeau d'indicateurs (résumé visuel en tête, cf. indicateurs.py).
+    danger_foret = None
+    if config["drought"]["activated"] and dept:
+        _d = conn.execute(
+            "SELECT value_class FROM drought_obs WHERE indicator='meteo_forets' AND dept=? "
+            "ORDER BY valid_date DESC LIMIT 1", (dept,)).fetchone()
+        danger_foret = _d["value_class"] if _d else None
+    # « concernées » = directement dans/près du feu (emprise + < 5 km), pas les couronnes lointaines.
+    n_concernees = len({r["code_insee"] for r in relations
+                        if r["rel_type"] in ("emprise_dans_commune", "a_moins_de_5km")})
+    indicateurs = indicateurs_feu(
+        config, wobs=wobs, latest=latest, danger_foret=danger_foret,
+        n_communes=n_concernees, actif=fire["lifecycle"] == "actif")
+
     gen = config["generate"]
     canonical_path = f"/feux/{fire['public_id']}/"
     description = synthese[0] if synthese else nom
@@ -299,6 +315,7 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
         "canonical_path": canonical_path,
         "og_image": og.og_path(dept),
         "jsonld": graph,
+        "indicateurs": indicateurs,
         "page_title": f"{nom} — suivi satellite, communes concernées | {gen['marque']}",
         "page_description": description,
         "fil_ariane": [

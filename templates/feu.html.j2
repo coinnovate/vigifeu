@@ -26,6 +26,19 @@
 </p>
 </header>
 
+{# Bandeau d'indicateurs — résumé visuel coloré par sévérité ; le détail suit ci-dessous #}
+{% if indicateurs %}
+<section class="indicateurs" aria-label="Indicateurs clés du feu">
+{% for i in indicateurs %}
+<div class="indic {{ i.statut }}">
+<span class="lab">{{ i.label }}</span>
+<span class="val">{{ i.valeur }}</span>
+<span class="niv">{{ i.niveau }}</span>
+</div>
+{% endfor %}
+</section>
+{% endif %}
+
 {# 3.2 Synthèse factuelle — le paragraphe citable (presse, moteurs génératifs) #}
 <section class="synthese" aria-label="Synthèse factuelle">
 {% for phrase in synthese %}
