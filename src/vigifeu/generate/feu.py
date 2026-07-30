@@ -150,20 +150,42 @@ _REL_ELOIGNES = ["a_moins_de_10km", "a_moins_de_20km"]
 
 
 def _groupes_communes(relations, rel_types):
+    """Communes par type de relation, DÉDUPLIQUÉES par commune.
+
+    `direction_vent` s'historise (une ligne par ouverture/fermeture au gré du vent) : la
+    section « direction actuelle du vent » ne montre que les relations EN COURS (valid_to
+    NULL) — pas l'historique. Pour les autres types, on fusionne les intervalles d'une même
+    commune (relation en cours ⇒ pas d'intervalle ; sinon la fenêtre min→max).
+    """
     groupes = []
     for rel_type in rel_types:
-        items = []
-        for r in relations:
-            if r["rel_type"] != rel_type:
+        rows = [r for r in relations if r["rel_type"] == rel_type]
+        if rel_type == "direction_vent":
+            rows = [r for r in rows if r["valid_to"] is None]   # « actuelle » = en cours
+        par_commune: dict = {}
+        for r in rows:
+            c = par_commune.get(r["code_insee"])
+            if c is None:
+                par_commune[r["code_insee"]] = {
+                    "nom": r["nom"], "code_insee": r["code_insee"], "slug": r["slug"],
+                    "dist": r["distance_km"], "actif": r["valid_to"] is None,
+                    "debut": r["valid_from"], "fin": r["valid_to"],
+                }
                 continue
+            if r["valid_to"] is None:
+                c["actif"] = True
+            if r["valid_from"] and (c["debut"] is None or r["valid_from"] < c["debut"]):
+                c["debut"] = r["valid_from"]
+            if r["valid_to"] and (c["fin"] is None or r["valid_to"] > c["fin"]):
+                c["fin"] = r["valid_to"]
+        items = []
+        for c in par_commune.values():
             interval = None
-            if r["valid_to"] is not None:
-                interval = f"concernée du {fr.date_fr(r['valid_from'])} au {fr.date_fr(r['valid_to'])}"
-            items.append({
-                "nom": r["nom"],
-                "href": f"/communes/{r['code_insee']}-{r['slug']}/",
-                "interval": interval,
-            })
+            if not c["actif"] and c["fin"] is not None:
+                interval = f"concernée du {fr.date_fr(c['debut'])} au {fr.date_fr(c['fin'])}"
+            items.append({"nom": c["nom"], "href": f"/communes/{c['code_insee']}-{c['slug']}/",
+                          "interval": interval, "_dist": c["dist"]})
+        items.sort(key=lambda x: (x["_dist"] is not None, x["_dist"] or 0, x["nom"]))
         if items:
             groupes.append({"titre": _REL_TITRES[rel_type], "communes": items})
     return groupes
