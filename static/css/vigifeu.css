@@ -40,7 +40,7 @@ body::before { content: ""; display: block; height: 4px; background: linear-grad
 
 /* En-tête : logo cliquable vers l'accueil. */
 .marque-logo { display: inline-flex; align-items: center; margin: .7rem 0 .1rem; }
-.marque-logo img { height: 2.25rem; width: auto; display: block; }
+.marque-logo img { height: 2.9rem; width: auto; display: block; max-width: 100%; }
 
 a { color: var(--lien); text-underline-offset: .15em; }
 a:hover { color: var(--orange); }
