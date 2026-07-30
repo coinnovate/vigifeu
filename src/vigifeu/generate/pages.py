@@ -8,12 +8,42 @@ nommées, latence chiffrée, définitions des libellés en FAQPage (JSON-LD).
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 from jinja2 import Environment
 
 from vigifeu.generate import jsonld, og
 from vigifeu.generate.writer import write_atomic
+from vigifeu.lexique import fr
+
+
+def latence_nrt_stats(conn: sqlite3.Connection, config: dict) -> dict | None:
+    """Latence NRT mesurée (ingested_at − acq_at) : médiane, 90ᵉ centile, effectif (minutes).
+
+    Argument chiffré de la page méthodologie (cadrage §15bis, plan §5.2). **Filtre
+    anti-backfill** : on exclut les détections dont la latence dépasse `latence_nrt_max_h` —
+    les jours re-téléchargés (backfill/récupération) ont un `ingested_at` tardif de plusieurs
+    jours qui fausserait la mesure, alors que la latence NRT ne se rejoue pas (P5). None tant
+    qu'il n'y a pas assez de mesures temps réel pour un chiffre crédible.
+    """
+    max_min = config["generate"].get("latence_nrt_max_h", 6) * 60
+    lat: list[float] = []
+    for r in conn.execute("SELECT acq_at, ingested_at FROM hotspot_raw WHERE ingested_at IS NOT NULL"):
+        try:
+            a = datetime.fromisoformat(r["acq_at"].replace("Z", "+00:00"))
+            i = datetime.fromisoformat(r["ingested_at"].replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            continue
+        minutes = (i - a).total_seconds() / 60
+        if 0 <= minutes <= max_min:
+            lat.append(minutes)
+    if len(lat) < 50:
+        return None
+    lat.sort()
+    n = len(lat)
+    return {"n": fr.nombre_fr(n), "mediane_min": round(lat[n // 2]),
+            "p90_min": round(lat[min(n - 1, int(n * 0.9))])}
 
 # Définitions des libellés — reprises telles quelles dans la FAQ visible ET le JSON-LD.
 FAQ_LIBELLES: list[tuple[str, str]] = [
@@ -63,6 +93,7 @@ def build_static_pages(conn: sqlite3.Connection, config: dict, env: Environment)
                     description="Sources, latence des détections satellitaires et définitions des libellés.",
                     graph=jsonld.render_graph(org, faq))
     ctx["faq"] = FAQ_LIBELLES
+    ctx["latence_nrt"] = latence_nrt_stats(conn, config)   # mesure chiffrée (cadrage §15bis)
     write_atomic(site / "methodologie" / "index.html", env.get_template("methodologie.html.j2").render(**ctx))
     n += 1
 

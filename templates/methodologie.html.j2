@@ -11,6 +11,13 @@ satellite ; un départ de feu peut précéder de plusieurs heures sa première d
 Les horodatages affichés sont ceux de la <strong>donnée</strong>, en heure locale
 française (Paris). Les données restent en UTC dans les métadonnées lisibles par les
 machines (JSON-LD).</p>
+{% if latence_nrt %}
+<p><strong>Mesure réelle</strong> sur la saison en cours : sur {{ latence_nrt.n }} détections
+collectées en temps réel (hors jours rattrapés a posteriori), le délai médian entre
+l'observation satellite et son intégration dans Sentifeu est de
+<strong>{{ latence_nrt.mediane_min }} minutes</strong> — 90 % des détections sont intégrées
+en moins de {{ latence_nrt.p90_min }} minutes.</p>
+{% endif %}
 </section>
 
 <section>
