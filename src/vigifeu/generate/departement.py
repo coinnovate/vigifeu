@@ -14,6 +14,7 @@ from pathlib import Path
 from jinja2 import Environment
 
 from vigifeu.generate import jsonld, og
+from vigifeu.generate.perimetre import communes_indexables, depts_indexables
 from vigifeu.generate.writer import write_atomic
 from vigifeu.lexique import fr
 
@@ -22,23 +23,11 @@ def _lieu(public_id: str) -> str:
     return public_id.partition("-")[2].replace("-", " ").title()
 
 
-def depts_du_perimetre(conn: sqlite3.Connection) -> list[str]:
-    """Départements ayant au moins une commune du périmètre indexable (concernée/historique)."""
-    return [r["dept"] for r in conn.execute(
-        "SELECT DISTINCT c.dept FROM commune c WHERE c.dept IS NOT NULL AND ("
-        "  c.code_insee IN (SELECT code_insee FROM fe_commune_rel) OR "
-        "  c.code_insee IN (SELECT code_insee FROM commune_fire_history)) "
-        "ORDER BY c.dept")]
-
-
 def load_departement_context(conn: sqlite3.Connection, config: dict, dept: str) -> dict:
     gen = config["generate"]
+    # Communes de la vague courante dans ce département (alignées sur sitemap + pages générées).
     communes = [{"nom": r["nom"], "href": f"/communes/{r['code_insee']}-{r['slug']}/"}
-                for r in conn.execute(
-                    "SELECT code_insee, slug, nom FROM commune WHERE dept=? AND ("
-                    "  code_insee IN (SELECT code_insee FROM fe_commune_rel) OR "
-                    "  code_insee IN (SELECT code_insee FROM commune_fire_history)) "
-                    "ORDER BY nom", (dept,))]
+                for r in communes_indexables(conn, config) if r["dept"] == dept]
     feux = [{"nom": f"Feu de {_lieu(r['public_id'])}", "url": f"/feux/{r['public_id']}/"}
             for r in conn.execute(
                 "SELECT DISTINCT f.public_id FROM fire_event f "
@@ -75,7 +64,7 @@ def build_departements_index(conn: sqlite3.Connection, config: dict, env: Enviro
     crawl stable vers l'arbre communes, indépendante des feux actifs (navigation d'hiver)."""
     gen = config["generate"]
     depts = [{"code": d, "nom": fr.nom_departement(d), "href": f"/departements/{d}/"}
-             for d in depts_du_perimetre(conn)]
+             for d in depts_indexables(conn, config)]
     ctx = {
         "base_url": gen["base_url"], "marque": gen["marque"],
         "canonical_path": "/departements/",
@@ -97,7 +86,7 @@ def build_departements(conn: sqlite3.Connection, config: dict, env: Environment)
     site = Path(config["generate"]["site_dir"])
     tmpl = env.get_template("departement.html.j2")
     n = 0
-    for dept in depts_du_perimetre(conn):
+    for dept in depts_indexables(conn, config):
         ctx = load_departement_context(conn, config, dept)
         write_atomic(site / "departements" / dept / "index.html", tmpl.render(**ctx))
         n += 1

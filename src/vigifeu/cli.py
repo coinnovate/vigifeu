@@ -260,6 +260,7 @@ def cmd_rebuild() -> None:
     sans régénération, et les assets sont rafraîchis par le déploiement (sync_static au
     boot, avec la clé MapTiler). À lancer daemon arrêté (écrivain unique)."""
     from vigifeu.engine.regen import CARTE_REF, enqueue
+    from vigifeu.generate.perimetre import communes_indexables
     from vigifeu.generate.runner import consume, finalize_site
 
     conn, config = _open()
@@ -267,7 +268,9 @@ def cmd_rebuild() -> None:
     n = enqueue(conn, "carte", CARTE_REF, stamp=stamp, trigger="rebuild")
     for f in conn.execute("SELECT id FROM fire_event WHERE public_id IS NOT NULL"):
         n += enqueue(conn, "feu", str(f["id"]), stamp=stamp, trigger="rebuild")
-    for c in conn.execute("SELECT DISTINCT code_insee FROM fe_commune_rel"):
+    # Toute la vague d'indexation courante (concernées + historique ≥ seuil) : les pages
+    # générées = celles listées au sitemap (Spec 04 §5, zéro 404).
+    for c in communes_indexables(conn, config):
         n += enqueue(conn, "commune", c["code_insee"], stamp=stamp, trigger="rebuild")
     conn.commit()
     stats = consume(conn, config, stamp=stamp)

@@ -43,20 +43,17 @@ def build_sitemaps(conn: sqlite3.Connection, config: dict) -> dict:
                 "WHERE public_id IS NOT NULL AND merged_into IS NULL "
                 "ORDER BY last_acq_at DESC")]
 
-    # Périmètre commune indexable = communes concernées OU à historique (cadrage §8.6).
-    communes = [(f"{base}/communes/{r['code_insee']}-{r['slug']}/", None)
-                for r in conn.execute(
-                    "SELECT DISTINCT c.code_insee, c.slug FROM commune c "
-                    "WHERE c.code_insee IN (SELECT code_insee FROM fe_commune_rel) "
-                    "   OR c.code_insee IN (SELECT code_insee FROM commune_fire_history) "
-                    "ORDER BY c.code_insee")]
+    # Périmètre = vague d'indexation courante (Spec 04 §5). Sitemap ALIGNÉ sur les pages
+    # réellement générées (mêmes communes → zéro 404).
+    from vigifeu.generate.perimetre import communes_indexables, depts_indexables
 
-    from vigifeu.generate.departement import depts_du_perimetre
+    communes = [(f"{base}/communes/{r['code_insee']}-{r['slug']}/", None)
+                for r in communes_indexables(conn, config)]
 
     pages = [(f"{base}/", None), (f"{base}/methodologie/", None),
              (f"{base}/mentions-legales/", None), (f"{base}/cgu/", None),
              (f"{base}/departements/", None)]
-    pages += [(f"{base}/departements/{d}/", None) for d in depts_du_perimetre(conn)]
+    pages += [(f"{base}/departements/{d}/", None) for d in depts_indexables(conn, config)]
 
     write_atomic(site / "sitemap-feux.xml", _urlset(feux))
     write_atomic(site / "sitemap-communes.xml", _urlset(communes))
