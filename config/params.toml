@@ -70,7 +70,7 @@ n_hysteresis = 3             # fermeture après N mesures consécutives hors sec
 # évaluées dans l'ordre, première qui matche. ⚠️ « Overpass » ici = l'API OpenStreetMap,
 # rien à voir avec engine/overpass.py (passages satellites). Licence ODbL → attribution.
 osm_rules = [
-    { category = "camping",         match = { tourism = "camping" } },
+    { category = "camping",         match = { tourism = "camp_site" } },
     { category = "ecole",           match = { amenity = "school" } },
     { category = "hopital",         match = { amenity = "hospital" } },
     { category = "ehpad",           match = { amenity = "social_facility", social_facility = "nursing_home" } },

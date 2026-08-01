@@ -82,6 +82,9 @@ def test_config_absente_leve(conn):
 
 
 def test_config_livree_a_des_regles():
-    """Garde-fou : la config expédiée porte bien les règles OSM (jeu v1)."""
+    """Garde-fou : la config expédiée porte bien les règles OSM (jeu v1), et le camping
+    utilise le VRAI tag OSM `tourism=camp_site` (pas `camping`, inexistant dans OSM —
+    régression vérifiée sur données réelles : un import régional renvoyait 0 camping)."""
     rules = load_config().get("poi", {}).get("osm_rules")
-    assert rules and any(rule["category"] == "camping" for rule in rules)
+    camping = [r for r in rules if r["category"] == "camping"]
+    assert camping and camping[0]["match"] == {"tourism": "camp_site"}

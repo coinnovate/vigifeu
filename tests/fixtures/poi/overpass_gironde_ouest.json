@@ -5,7 +5,7 @@
   "elements": [
     {
       "type": "node", "id": 1001, "lat": 44.8710, "lon": -1.1350,
-      "tags": { "tourism": "camping", "name": "Camping de la Grigne" }
+      "tags": { "tourism": "camp_site", "name": "Camping de la Grigne" }
     },
     {
       "type": "node", "id": 1002, "lat": 44.8695, "lon": -1.1310,
