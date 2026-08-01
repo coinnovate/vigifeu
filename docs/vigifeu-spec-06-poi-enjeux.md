@@ -150,6 +150,12 @@ Lexique contractuel (Spec 03 §1 P3) :
   la catégorie seule n'affirme ni nom, ni capacité, ni impact. Le POI **dans l'emprise** est rendu à
   l'intérieur du polygone (distinct des marqueurs alentour), porteur de la **réserve de coarseness**
   (marqueur ≠ dégât). Le **nominatif + capacité + site déclaré précis** restent **abonné** (Spec 08).
+- **Visibilité (décision 2026-08-01) : marqueurs POI affichés PAR DÉFAUT** (cohérent avec la phrase agrégée,
+  déjà par défaut), avec un **toggle de masquage** (case de légende = visibilité de calque MapLibre) pour
+  qui veut une carte épurée. Pas d'opt-in : l'enjeu est la valeur, visible tout de suite (y compris crawlers).
+- **Paliers sur la carte (décision 2026-08-01) : `emprise` + `a_moins_de_5km` seulement.** Les paliers
+  lointains (10/20 km) restent **dans le texte** (comptes agrégés), pas en marqueurs — sinon un méga-feu
+  couvre la carte de marqueurs à 20 km qui n'apprennent rien.
 - La page méthodologie documente la **réserve de fraîcheur** et la coarseness de l'emprise (esprit
   « plus détecté ≠ éteint », Spec 03 §1 P6).
 
