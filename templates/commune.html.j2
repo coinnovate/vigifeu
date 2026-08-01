@@ -66,6 +66,19 @@
 {% endif %}
 </section>
 
+{# Enjeux sensibles dans la commune (Spec 06 §4) — recensement AGRÉGÉ, permanent, jamais
+   nominatif. Section absente tant qu'aucun référentiel POI n'est chargé (dégradé — P6). #}
+{% if recensement_poi or not recensement_indispo %}
+<section class="enjeux-commune">
+<h2>Enjeux sensibles dans la commune</h2>
+{% if recensement_poi %}
+<p>{{ recensement_poi }}.</p>
+{% else %}
+<p class="calme">Aucun établissement sensible recensé dans la commune.</p>
+{% endif %}
+<p class="note">{{ recensement_reserve }}</p>
+</section>
+{% endif %}
 {# 4.5 Exposition structurelle #}
 {% if exposition %}
 <section class="exposition">

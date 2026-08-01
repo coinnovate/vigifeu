@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pytest
 
+from vigifeu.generate.commune import _recensement_poi
 from vigifeu.generate.feu import _enjeux_poi
 from vigifeu.lexique import fr
 from vigifeu.model.db import connect, migrate
@@ -85,3 +86,30 @@ def test_loader_agrege_et_ignore_lointains_et_fermes(conn):
 
 def test_loader_vide_sans_relation(conn):
     assert _enjeux_poi(conn, 1) == []
+
+
+# --- recensement sur la fiche commune (commune_poi) ---
+
+def test_phrase_recensement():
+    s = fr.phrase_recensement_poi({"camping": 3, "ecole": 1, "icpe_seveso": 1})
+    assert s == ("Enjeux sensibles recensés dans la commune : "
+                 "3 campings, 1 établissement scolaire et 1 site Seveso")
+
+
+def test_phrase_recensement_vide():
+    assert fr.phrase_recensement_poi({}) == ""
+
+
+def test_recensement_loader(conn):
+    conn.execute("INSERT INTO commune (code_insee, slug, nom) VALUES ('33333', 'le-porge', 'Le Porge')")
+    c1, c2 = _poi(conn, "camping", "n/1"), _poi(conn, "camping", "n/2")
+    e1 = _poi(conn, "ecole", "n/3")
+    hors = _poi(conn, "hopital", "n/4")   # existe mais pas rattaché à la commune
+    for pid in (c1, c2, e1):
+        conn.execute("INSERT INTO commune_poi (code_insee, poi_id) VALUES ('33333', ?)", (pid,))
+    conn.commit()
+    assert _recensement_poi(conn, "33333") == (
+        "Enjeux sensibles recensés dans la commune : 2 campings et 1 établissement scolaire"
+    )
+    assert hors  # le POI non rattaché n'apparaît pas
+    assert _recensement_poi(conn, "00000") == ""   # commune sans POI recensé

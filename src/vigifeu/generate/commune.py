@@ -130,6 +130,23 @@ def _historique(conn, code_insee):
     return {"synthese": synthese, "notables": notables, "suivis": suivis}
 
 
+def _recensement_poi(conn, code_insee):
+    """Recensement AGRÉGÉ des POI de la commune (Spec 06 §4, via commune_poi). Jamais nominatif.
+
+    Contenu permanent (valeur hors-saison / SEO), comme l'historique BDIFF. Chaîne vide si
+    aucun enjeu recensé ; le dégradé (aucun référentiel POI) est porté par `enjeux_indispo`."""
+    rows = conn.execute(
+        "SELECT p.category, COUNT(*) AS n FROM commune_poi cp JOIN poi p ON p.id = cp.poi_id "
+        "WHERE cp.code_insee=? GROUP BY p.category",
+        (code_insee,),
+    ).fetchall()
+    return fr.phrase_recensement_poi({r["category"]: r["n"] for r in rows})
+
+
+def _poi_referentiel_charge(conn):
+    return conn.execute("SELECT 1 FROM poi LIMIT 1").fetchone() is not None
+
+
 def load_commune_context(conn: sqlite3.Connection, config: dict, code_insee: str) -> dict:
     commune = _commune_row(conn, code_insee)
     gen = config["generate"]
@@ -188,6 +205,11 @@ def load_commune_context(conn: sqlite3.Connection, config: dict, code_insee: str
         "millesime": commune["referentiel_millesime"],
         "situation": situation,
         "aucun_feu": (fr.commune_aucun_feu(derniere_obs) if not situation and derniere_obs else None),
+        # Recensement POI (Spec 06 §4) : agrégé, permanent ; section absente tant qu'aucun
+        # référentiel POI n'est chargé (dégradé, pas d'affirmation d'absence — P6).
+        "recensement_poi": _recensement_poi(conn, code_insee),
+        "recensement_indispo": not _poi_referentiel_charge(conn),
+        "recensement_reserve": fr.note_enjeux_poi(),
         "contexte": _contexte_du_jour(conn, config, commune),
         "historique": _historique(conn, code_insee),
         "exposition": exposition,

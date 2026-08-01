@@ -397,6 +397,17 @@ def phrase_enjeux_poi(tier: str, counts: dict) -> str:
     return f"À proximité (moins de 5 km) : {corps}"
 
 
+def phrase_recensement_poi(counts: dict) -> str:
+    """Recensement AGRÉGÉ des enjeux d'une commune (Spec 06 §4, fiche commune). Jamais nominatif.
+
+    `counts` = {catégorie: nombre}. Chaîne vide si aucun enjeu recensé. Contenu permanent,
+    hors événement (comme l'historique BDIFF) — pas une alerte."""
+    items = [_enjeu_item(cat, counts[cat]) for cat in _ENJEU_LABELS if counts.get(cat)]
+    if not items:
+        return ""
+    return f"Enjeux sensibles recensés dans la commune : {_liste_fr(items)}"
+
+
 def note_enjeux_poi() -> str:
     """Réserve affichée sous les enjeux (Spec 06 §4 / P0) : ni impact, ni nominatif."""
     return ("Établissements sensibles recensés à partir de données publiques "
