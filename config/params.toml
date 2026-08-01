@@ -100,6 +100,11 @@ bdtopo_rules = [
 # BD TOPO (officiel, frais) prime sur OSM ; Géorisques est seul sur icpe_seveso.
 dedup_radius_m = 150
 source_priority = ["bdtopo", "georisques", "osm"]
+# Spec 06 §2.2 / §8 — import Géorisques (3ᵉ source). Périmètre v1 : Seveso SEUL (seuil haut/bas)
+# — sous-ensemble à fort enjeu, bien géolocalisé (les ICPE simples, géoloc grossière, en v1.1).
+# Catégorie unique produite : icpe_seveso. Statuts acceptés (sous-chaîne, insensible casse) —
+# ⚠️ à confirmer contre l'export réel (certains exports codent SH/SB au lieu du libellé long).
+georisques_seveso_statuts = ["seveso seuil haut", "seveso seuil bas"]
 
 [version]
 # Spec 02 §6 — mesures factuelles par version. area_ha = aire de l'enveloppe ×

@@ -1,0 +1,5 @@
+code_aiot;nom_ets;statut_seveso;longitude;latitude;x_l93;y_l93;code_insee
+0064.00001;Dépôt pétrolier de la Pointe;Seveso seuil haut (AS);-1.1500;44.8000;;;33236
+0064.00002;Silo agricole de Lège;Seveso seuil bas;;;369479.5;6417734.3;33236
+0064.00003;Menuiserie du Bourg;Non Seveso;-1.1200;44.8500;;;33236
+0064.00004;Site Seveso sans coordonnées;Seveso seuil haut;;;;;33236
