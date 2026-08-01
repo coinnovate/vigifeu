@@ -1,0 +1,40 @@
+{
+  "results": 4,
+  "page": 1,
+  "note": "Fixture Vigifeu (Spec 06 §2.2/§8) — format réel de l'API Géorisques installations_classees (camelCase). Sites fictifs.",
+  "data": [
+    {
+      "codeAIOT": "0064.00001",
+      "raisonSociale": "Dépôt pétrolier de la Pointe",
+      "statutSeveso": "Seveso seuil haut",
+      "longitude": -1.15,
+      "latitude": 44.8,
+      "codeInsee": "33236",
+      "commune": "Lège-Cap-Ferret"
+    },
+    {
+      "codeAIOT": "0064.00002",
+      "raisonSociale": "Silo agricole de Lège",
+      "statutSeveso": "Seveso seuil bas",
+      "longitude": null,
+      "latitude": null,
+      "coordonneeXAIOT": 369479.5,
+      "coordonneeYAIOT": 6417734.3,
+      "systemeCoordonneesAIOT": "2154"
+    },
+    {
+      "codeAIOT": "0064.00003",
+      "raisonSociale": "Menuiserie du Bourg",
+      "statutSeveso": "Non Seveso",
+      "longitude": -1.12,
+      "latitude": 44.85
+    },
+    {
+      "codeAIOT": "0064.00004",
+      "raisonSociale": "Site Seveso sans coordonnées",
+      "statutSeveso": "Seveso seuil haut",
+      "longitude": null,
+      "latitude": null
+    }
+  ]
+}

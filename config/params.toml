@@ -102,8 +102,8 @@ dedup_radius_m = 150
 source_priority = ["bdtopo", "georisques", "osm"]
 # Spec 06 §2.2 / §8 — import Géorisques (3ᵉ source). Périmètre v1 : Seveso SEUL (seuil haut/bas)
 # — sous-ensemble à fort enjeu, bien géolocalisé (les ICPE simples, géoloc grossière, en v1.1).
-# Catégorie unique produite : icpe_seveso. Statuts acceptés (sous-chaîne, insensible casse) —
-# ⚠️ à confirmer contre l'export réel (certains exports codent SH/SB au lieu du libellé long).
+# Catégorie unique produite : icpe_seveso. Valeurs `statutSeveso` VÉRIFIÉES live (2026-08-01) contre
+# l'API Géorisques : « Seveso seuil haut » / « Seveso seuil bas » (match sous-chaîne, insensible casse).
 georisques_seveso_statuts = ["seveso seuil haut", "seveso seuil bas"]
 
 [version]

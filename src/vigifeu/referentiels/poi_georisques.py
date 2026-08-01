@@ -1,30 +1,33 @@
 """Import Géorisques du référentiel POI — sites Seveso (Spec 06 §2.2/§8, étape 8).
 
-Troisième source du référentiel POI. **Périmètre v1 (décision 2026-08-01) : Seveso SEUL**
-(seuil haut/bas), pas les ICPE simples : ~1 300 sites bien géolocalisés à fort enjeu, qui
-collent à la cible « exploitants de sites » (Spec 05). Les ICPE simples ont une géoloc
-souvent grossière (centroïde commune, §2.3) → faux « dans la zone détectée » → reportées v1.1.
+**Périmètre v1 (décision 2026-08-01) : Seveso SEUL** (seuil haut/bas), pas les ICPE simples :
+sous-ensemble à fort enjeu, bien géolocalisé, qui colle à la cible « exploitants de sites »
+(Spec 05). Les ICPE simples ont une géoloc souvent grossière (§2.3) → reportées v1.1.
 
-Source : `georisques.gouv.fr` / data.gouv.fr « Base des installations classées (ICPE) »,
-export **CSV**, Licence ouverte, mise à jour quotidienne. Même mécanique de lecture tolérante
-que `bdiff.py` (encodage cp1252/utf-8, séparateur ; ou ,). Catégorie unique `icpe_seveso`
-(celle du lexique). Upsert idempotent par (`source='georisques'`, `source_ref`=code AIOT).
+**Source réelle = API JSON Géorisques** (vérifiée live 2026-08-01), PAS un CSV comme le
+supposait la 1ʳᵉ version (hypothèse de format corrigée sur la vraie donnée, comme le tag
+`camp_site` d'OSM) : `https://www.georisques.gouv.fr/api/v1/installations_classees`, paginée,
+retourne `{data: [ {record}, … ]}`. Champs en **camelCase** :
 
-⚠️ HYPOTHÈSE DE FORMAT (comme bdiff/drought) : libellés de colonnes et de statut Seveso à
-confirmer contre l'export réel. Toute la logique de mapping est isolée dans `_normalize_row`
-et la config `[poi].georisques_seveso_statuts` — seuls points à ajuster.
+- `statutSeveso` : « Seveso seuil haut » / « Seveso seuil bas » / « Non Seveso » / null ;
+- `codeAIOT`     : clé naturelle (source_ref) ;
+- `raisonSociale`: nom de l'établissement ;
+- `longitude` / `latitude` : WGS84 (présents la plupart du temps) ;
+- `coordonneeXAIOT` / `coordonneeYAIOT` (+ `systemeCoordonneesAIOT` = "2154") : Lambert-93,
+  utilisés en repli quand longitude/latitude manquent.
 
-Coordonnées : `longitude`/`latitude` (WGS84) si présentes, sinon `x`/`y` en Lambert-93
-reprojetés — Géorisques livre les deux selon l'export.
+Le filtre serveur `statutSeveso` n'accepte pas la valeur affichée → on tire toute la base
+et on filtre **côté client** sur le libellé (config `[poi].georisques_seveso_statuts`). Ops :
+paginer l'API en un fichier `{data:[…]}` (ou concaténer les pages), puis `import_poi_georisques`.
+Upsert idempotent par (`source='georisques'`, `source_ref`=codeAIOT). Catégorie `icpe_seveso`.
 """
 
 from __future__ import annotations
 
-import csv
+import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator
 
 from shapely.geometry import Point
 
@@ -41,11 +44,13 @@ def _now_utc() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _pick(raw: dict, *keys: str):
+def _get(rec: dict, *keys: str):
+    """Lecture tolérante (camelCase attendu, mais on reste souple sur les variantes)."""
+    lowered = {k.lower(): v for k, v in rec.items()}
     for k in keys:
-        for rk, v in raw.items():
-            if rk and rk.strip().lower() == k.lower() and v not in (None, ""):
-                return v
+        v = lowered.get(k.lower())
+        if v not in (None, ""):
+            return v
     return None
 
 
@@ -58,42 +63,45 @@ def _to_float(v) -> float | None:
         return None
 
 
-def _is_seveso(statut: str | None, accepted: list[str]) -> bool:
+def _is_seveso(statut, accepted: list[str]) -> bool:
     """Vrai si le statut Seveso figure parmi les valeurs acceptées (config). Comparaison
-    insensible à la casse/accents, par sous-chaîne (« Seveso seuil haut (AS) » matche)."""
+    insensible à la casse, par sous-chaîne (« Seveso seuil haut (AS) » matcherait aussi)."""
     if not statut:
         return False
-    s = statut.strip().lower()
+    s = str(statut).strip().lower()
     return any(tok in s for tok in accepted)
 
 
-def _coords(raw: dict) -> tuple[float, float] | None:
-    """(lat, lon) WGS84 : longitude/latitude directes, sinon x/y Lambert-93 reprojetés."""
-    lat = _to_float(_pick(raw, "latitude", "lat", "y_wgs84"))
-    lon = _to_float(_pick(raw, "longitude", "lon", "lng", "x_wgs84"))
+def _coords(rec: dict) -> tuple[float, float] | None:
+    """(lat, lon) WGS84 : longitude/latitude directes, sinon coordonnee[XY]AIOT (Lambert-93)."""
+    lat = _to_float(_get(rec, "latitude"))
+    lon = _to_float(_get(rec, "longitude"))
     if lat is not None and lon is not None:
         return lat, lon
-    x = _to_float(_pick(raw, "x_l93", "x", "coordxlambert93", "x_lambert93"))
-    y = _to_float(_pick(raw, "y_l93", "y", "coordylambert93", "y_lambert93"))
-    if x is not None and y is not None:
+    x = _to_float(_get(rec, "coordonneeXAIOT", "coordonnee_x_aiot", "x_l93"))
+    y = _to_float(_get(rec, "coordonneeYAIOT", "coordonnee_y_aiot", "y_l93"))
+    srs = str(_get(rec, "systemeCoordonneesAIOT") or "2154")
+    if x is not None and y is not None and srs == "2154":
         p = geo.to_wgs84_geom(Point(x, y))
         return p.y, p.x  # (lat, lon)
     return None
 
 
-def _read_csv(path: Path) -> Iterator[dict]:
-    for enc in ("utf-8-sig", "cp1252", "latin-1"):
-        try:
-            text = path.read_text(encoding=enc)
-            break
-        except UnicodeDecodeError:
-            continue
-    else:
-        raise PoiGeorisquesImportError(f"encodage illisible: {path}")
-    lines = text.splitlines()
-    sample = "\n".join(lines[:3])
-    delim = ";" if sample.count(";") >= sample.count(",") else ","
-    yield from csv.DictReader(lines, delimiter=delim)
+def _records(source: Path) -> list[dict]:
+    """Récupère la liste des installations depuis un JSON Géorisques.
+
+    Accepte la forme API `{data: [...]}` (une page ou plusieurs concaténées) ou une
+    liste nue `[...]`. Pas d'appel réseau ici : l'assemblage des pages est un geste ops.
+    """
+    data = json.loads(source.read_text(encoding="utf-8"))
+    if isinstance(data, dict):
+        recs = data.get("data")
+        if recs is None:
+            raise PoiGeorisquesImportError("JSON Géorisques sans clé 'data'")
+        return recs
+    if isinstance(data, list):
+        return data
+    raise PoiGeorisquesImportError(f"format JSON inattendu: {type(data).__name__}")
 
 
 def import_poi_georisques(
@@ -105,8 +113,8 @@ def import_poi_georisques(
 ) -> dict:
     """Importe/actualise les sites Seveso Géorisques (idempotent par (`source`, `source_ref`)).
 
-    Les lignes non-Seveso, sans identifiant, ou sans coordonnées exploitables sont ignorées
-    (comptées). Retourne {upserted, skipped}.
+    Les installations non-Seveso, sans identifiant, ou sans coordonnées exploitables sont
+    ignorées (comptées). Retourne {upserted, skipped}.
     """
     accepted = [
         s.strip().lower()
@@ -122,18 +130,17 @@ def import_poi_georisques(
 
     upserted = 0
     skipped = 0
-    for raw in _read_csv(path):
-        statut = _pick(raw, "statut_seveso", "seveso", "regime_seveso", "statutSeveso")
-        if not _is_seveso(statut, accepted):
+    for rec in _records(path):
+        if not _is_seveso(_get(rec, "statutSeveso", "statut_seveso", "seveso"), accepted):
             skipped += 1
             continue
-        source_ref = _pick(raw, "code_aiot", "codeAIOT", "identifiant", "id", "code")
-        coords = _coords(raw)
+        source_ref = _get(rec, "codeAIOT", "code_aiot", "identifiant", "id")
+        coords = _coords(rec)
         if source_ref is None or coords is None:
             skipped += 1
             continue
         lat, lon = coords
-        nom = _pick(raw, "nom_ets", "nom_etablissement", "raison_sociale", "nom", "toponyme")
+        nom = _get(rec, "raisonSociale", "nom_ets", "nom_etablissement", "nom")
         conn.execute(
             "INSERT INTO poi (source, source_ref, category, nom, lat, lon, imported_at) "
             "VALUES ('georisques', ?, ?, ?, ?, ?, ?) "
