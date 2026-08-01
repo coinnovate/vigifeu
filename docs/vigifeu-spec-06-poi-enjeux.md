@@ -102,7 +102,8 @@ pour le recensement permanent des enjeux (§4). Indépendant des feux.
 
 - **Carte nationale : NON** — bruit, poids, et ce serait « la carte des sites vulnérables » en permanence.
 - **Fiche feu : OUI** (Spec 03 §3.3) — POI proches ou dans l'emprise (`fe_poi_rel`), sur la carte
-  (marqueurs par catégorie, agrégés, sans étiquette nominative) + **phrase de qualification agrégée**.
+  (**marqueurs individuels par catégorie**, icône, sans étiquette) + **phrase de qualification agrégée**
+  (comptes). La carte montre les positions ; le texte reste agrégé.
 - **Fiche commune : OUI** — **recensement agrégé permanent** des enjeux de la commune (`commune_poi`, §3.2),
   au même titre que l'historique BDIFF et le contexte sécheresse (valeur hors-saison / SEO).
 
@@ -126,8 +127,11 @@ Lexique contractuel (Spec 03 §1 P3) :
 - L'**enjeu nommé + chiffré** (« camping de 3 500 places à 2 km ») et le nominatif « votre site est dans la
   zone détectée — vérifiez auprès des secours » sont des **features abonné** (Spec 08), sous limitation de
   responsabilité contractuelle. Même partage gratuit/payant que la courbe MTG (Spec 05 §2.7).
-- Sur la **carte de fiche** : marqueurs par catégorie, agrégés ; le POI **dans l'emprise** est rendu à
-  l'intérieur du polygone (distinct des marqueurs alentour).
+- Sur la **carte de fiche** (**décision A, 2026-07-31**) : **marqueurs individuels par catégorie** (icône
+  ⛺/🏫/…, **sans nom ni capacité**). Les emplacements viennent de la **donnée publique** (OSM/BD TOPO) ;
+  la catégorie seule n'affirme ni nom, ni capacité, ni impact. Le POI **dans l'emprise** est rendu à
+  l'intérieur du polygone (distinct des marqueurs alentour), porteur de la **réserve de coarseness**
+  (marqueur ≠ dégât). Le **nominatif + capacité + site déclaré précis** restent **abonné** (Spec 08).
 - La page méthodologie documente la **réserve de fraîcheur** et la coarseness de l'emprise (esprit
   « plus détecté ≠ éteint », Spec 03 §1 P6).
 
