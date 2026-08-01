@@ -73,11 +73,11 @@ def _hotspot_count(conn, event_id):
     ).fetchone()["n"]
 
 
-def _enjeux_poi(conn, event_id):
-    """Enjeux POI AGRÉGÉS par palier (emprise, < 5 km), phrases via le lexique (Spec 06 §4).
+def _poi_tiers(conn, event_id):
+    """{palier: {category: n}} pour les paliers rendus sur la carte (emprise, < 5 km).
 
-    Public prudent : comptes par catégorie, jamais de nom ni de capacité. Les paliers
-    10/20 km ne sont pas surfacés (faible signal comme enjeu ; ils restent en base)."""
+    Base commune aux phrases d'enjeux et à la légende : mêmes paliers que
+    `geojson._poi_features`, pour que la légende décode exactement les marqueurs affichés."""
     rows = conn.execute(
         "SELECT r.rel_type, p.category, COUNT(*) AS n "
         "FROM fe_poi_rel r JOIN poi p ON p.id = r.poi_id "
@@ -89,12 +89,34 @@ def _enjeux_poi(conn, event_id):
     for r in rows:
         if r["rel_type"] in tiers:
             tiers[r["rel_type"]][r["category"]] = r["n"]
+    return tiers
+
+
+def _enjeux_poi(conn, event_id):
+    """Enjeux POI AGRÉGÉS par palier (emprise, < 5 km), phrases via le lexique (Spec 06 §4).
+
+    Public prudent : comptes par catégorie, jamais de nom ni de capacité. Les paliers
+    10/20 km ne sont pas surfacés (faible signal comme enjeu ; ils restent en base)."""
+    tiers = _poi_tiers(conn, event_id)
     phrases = []
     if tiers["emprise"]:
         phrases.append(fr.phrase_enjeux_poi("emprise", tiers["emprise"]))
     if tiers["a_moins_de_5km"]:
         phrases.append(fr.phrase_enjeux_poi("proximite", tiers["a_moins_de_5km"]))
     return phrases
+
+
+def _enjeux_poi_legende(conn, event_id):
+    """Clé de légende : catégories réellement présentes sur la carte (emprise + < 5 km),
+    ordonnées comme les phrases (ordre du lexique). Décode les pastilles de couleur —
+    sans elle, un point vert = camping n'est lisible qu'au survol (KO sur mobile)."""
+    tiers = _poi_tiers(conn, event_id)
+    present = set(tiers["emprise"]) | set(tiers["a_moins_de_5km"])
+    return [
+        {"category": cat, "libelle": fr.libelle_categorie_poi(cat)}
+        for cat in fr.categories_poi()
+        if cat in present
+    ]
 
 
 def _poi_referentiel_charge(conn):
@@ -370,6 +392,7 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
         # Enjeux POI (Spec 06 §4) : agrégé, jamais nominatif ; section absente tant qu'aucun
         # référentiel POI n'est chargé (dégradé, pas d'affirmation d'absence — P6).
         "enjeux_poi": _enjeux_poi(conn, event_id),
+        "enjeux_poi_legende": _enjeux_poi_legende(conn, event_id),
         "enjeux_indispo": not _poi_referentiel_charge(conn),
         "enjeux_reserve": fr.note_enjeux_poi(),
         "chronologie": _chronologie(conn, config, event_id),

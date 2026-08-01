@@ -56,6 +56,14 @@
 </div>
 {% if enjeux_poi %}
 <label class="toggle-poi"><input type="checkbox" id="toggle-poi" checked> Afficher les enjeux à proximité (campings, écoles, sites sensibles)</label>
+{% if enjeux_poi_legende %}
+{# Clé des marqueurs POI : couleur → catégorie (Spec 06 §4). Seules les catégories
+   réellement présentes sur la carte (emprise + < 5 km) ; contour foncé = dans la zone. #}
+<div class="legende-carte legende-poi" aria-hidden="true">
+{% for e in enjeux_poi_legende %}<span><i class="pastille poi poi-{{ e.category }}"></i> {{ e.libelle }}</span>
+{% endfor %}<span><i class="pastille poi poi-emprise"></i> Dans la zone détectée</span>
+</div>
+{% endif %}
 {% endif %}
 <div class="carte" data-carte="feu" data-geojson="feu.geojson" role="img"
      aria-label="Carte des zones détectées du feu ; description complète dans la synthèse ci-dessus"></div>

@@ -20,6 +20,14 @@
   --front: var(--rouge);   /* front_actif — rouge, doublé par la forme/intensité */
   --recent: var(--orange); /* recent — orange */
   --ancien: #8a93a3;       /* plus_detecte — gris bleuté */
+  /* Teintes des marqueurs POI (enjeux, Spec 06 §4) — TENIR SYNCHRO avec POI_COULEUR de
+     static/js/carte.js (même duplication CSS/JS que les couleurs de cellules ci-dessus). */
+  --poi-camping: #2e7d5b;
+  --poi-ecole: #3f6fb0;
+  --poi-hopital: #b0555b;
+  --poi-ehpad: #7a5ba8;
+  --poi-station_service: #a8823f;
+  --poi-icpe_seveso: #555555;
   --lien: var(--marine);
   --largeur: 44rem;
   color-scheme: light;   /* UI navigateur (barres, contrôles) en clair — pas de fond sombre */
@@ -100,6 +108,17 @@ th, td { text-align: left; padding: .35rem .6rem; border-bottom: 1px solid var(-
 .pastille.front_actif { background: var(--front); }
 .pastille.recent { background: var(--recent); }
 .pastille.plus_detecte { background: var(--ancien); }
+/* Pastilles POI : rondes (comme les marqueurs cercles de la carte), teintées par catégorie.
+   La puce « emprise » porte le contour foncé qui, sur la carte, marque « dans la zone détectée ». */
+.pastille.poi { border-radius: 50%; }
+.pastille.poi-camping { background: var(--poi-camping); }
+.pastille.poi-ecole { background: var(--poi-ecole); }
+.pastille.poi-hopital { background: var(--poi-hopital); }
+.pastille.poi-ehpad { background: var(--poi-ehpad); }
+.pastille.poi-station_service { background: var(--poi-station_service); }
+.pastille.poi-icpe_seveso { background: var(--poi-icpe_seveso); }
+.pastille.poi-emprise { background: var(--fond-doux); border: 2px solid #1a1a1a; }
+.legende-poi { margin-top: -.3rem; }
 .legende-cone { font-size: .8rem; color: var(--gris); font-style: italic; }
 
 ul.colonnes { columns: 2 12rem; gap: 1.2rem; padding-left: 1.1rem; }

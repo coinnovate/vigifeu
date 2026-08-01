@@ -387,6 +387,11 @@ def libelle_categorie_poi(category: str) -> str:
     return _ENJEU_LABELS.get(category, (category, category))[0]
 
 
+def categories_poi() -> list[str]:
+    """Catégories POI dans l'ordre d'affichage du lexique (légende de carte, §4)."""
+    return list(_ENJEU_LABELS)
+
+
 def phrase_enjeux_poi(tier: str, counts: dict) -> str:
     """Énoncé AGRÉGÉ des enjeux d'un palier (Spec 06 §4). Jamais de nom ni de capacité.
 
