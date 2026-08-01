@@ -76,6 +76,30 @@ osm_rules = [
     { category = "ehpad",           match = { amenity = "social_facility", social_facility = "nursing_home" } },
     { category = "station_service", match = { amenity = "fuel" } },
 ]
+# Spec 06 §2.2 / §8 — import BD TOPO (IGN, thème « Services et activités », data.geopf.fr).
+# 2ᵉ source : mêmes catégories qu'OSM mais officielles/fraîches (Etalab). On balaie toutes
+# les couches géométriques du GeoPackage et on catégorise par l'attribut `nature` (comparaison
+# insensible à la casse/accents). ⚠️ HYPOTHÈSE DE FORMAT : les valeurs `nature` réelles sont à
+# confirmer contre un GeoPackage BD TOPO (comme les fetchers drought/bdiff) — cette table est
+# le seul point à ajuster. La dédup vs OSM se fait ensuite (bdtopo_source_priority + passe dédup).
+bdtopo_rules = [
+    { category = "camping",         match = { nature = "Camping" } },
+    { category = "hopital",         match = { nature = "Centre hospitalier" } },
+    { category = "hopital",         match = { nature = "Hôpital" } },
+    { category = "hopital",         match = { nature = "Clinique" } },
+    { category = "ehpad",           match = { nature = "Maison de retraite" } },
+    { category = "ecole",           match = { nature = "École maternelle" } },
+    { category = "ecole",           match = { nature = "École élémentaire" } },
+    { category = "ecole",           match = { nature = "Collège" } },
+    { category = "ecole",           match = { nature = "Lycée" } },
+    { category = "station_service", match = { nature = "Station-service" } },
+]
+# Spec 06 §2.3 — déduplication inter-sources. Deux POI de sources DIFFÉRENTES, même catégorie,
+# à moins de dedup_radius_m l'un de l'autre = même enjeu physique → un seul compte. On garde le
+# POI de la source la PLUS prioritaire (fraîcheur/qualité), l'autre est marqué superseded_by.
+# BD TOPO (officiel, frais) prime sur OSM ; Géorisques est seul sur icpe_seveso.
+dedup_radius_m = 150
+source_priority = ["bdtopo", "georisques", "osm"]
 
 [version]
 # Spec 02 §6 — mesures factuelles par version. area_ha = aire de l'enveloppe ×
