@@ -54,17 +54,35 @@ Sœur de `commune`. Esquisse (à figer à la migration) :
 
 Clé d'idempotence = (`source`, `source_ref`). Ré-import = upsert.
 
-### 2.2 Ordre des sources
+### 2.2 Ordre des sources — où trouver les données
 
-1. **OpenStreetMap** — en premier (largeur + rapidité). Voie : extrait **Geofabrik France** (`.osm.pbf`)
-   filtré par tags (`tourism=camping`, `amenity=school`, `amenity=hospital`, `amenity=fuel`, …), ou
-   **Overpass OSM** pour des mises à jour ciblées. ⚠️ à **ne pas confondre** avec `engine/overpass.py`
-   (= passages satellites) ; l'ingestion OSM est du code neuf. Licence **ODbL → attribution obligatoire**.
-2. **BD TOPO (IGN)** — couche « points d'activité/intérêt » (santé, enseignement, sport/loisir dont
-   campings). **Officielle, fraîche, licence Etalab** ; GeoPackages départementaux (même mécanique
-   d'import qu'Admin Express, Lot 3).
-3. **ICPE / Seveso via Géorisques** (`georisques.gouv.fr`, open data) — sous-ensemble à **fort enjeu**,
-   pertinent pour la cible « exploitants de sites » (Spec 05 §4).
+Catégories v1 (Spec 05 §4, §7) : campings, écoles, hôpitaux/EHPAD, stations-service, ICPE-Seveso.
+
+| Catégories | Source | Où télécharger | Format / licence |
+|---|---|---|---|
+| campings, écoles, hôpitaux/EHPAD, stations-service | **OpenStreetMap** | Overpass API (ciblé) ou extrait **Geofabrik France** | GeoJSON / `.osm.pbf` — **ODbL** (attribution) |
+| santé, enseignement, PAI (dont campings) | **BD TOPO (IGN)** | `data.geopf.fr/telechargement/resource/BDTOPO` | GeoPackage v3.5 — **Etalab** |
+| ICPE / Seveso | **Géorisques** | `georisques.gouv.fr/donnees/bases-de-donnees/installations-industrielles` | CSV + Shapefile — **Licence ouverte** |
+
+1. **OpenStreetMap** — en premier (largeur + rapidité).
+   - **Overpass API** (`https://overpass-api.de/api/interpreter`) — requête ciblée, sort du **GeoJSON**
+     direct, léger (voie de démarrage, comme la fixture Lot 3). Tags v1 : campings `tourism=camping` ;
+     écoles `amenity=school` ; hôpitaux/cliniques `amenity=hospital` ; EHPAD `amenity=social_facility`
+     + `social_facility=nursing_home` ; stations-service `amenity=fuel`.
+   - **Geofabrik** (`download.geofabrik.de/europe/france.html`) — `france-latest.osm.pbf` (~4 Go) ou
+     sous-extraits régionaux (ex. Nouvelle-Aquitaine), à parser en **pyosmium** ; pour volume/robustesse.
+   - ⚠️ à **ne pas confondre** avec `engine/overpass.py` (= passages satellites) ; l'ingestion OSM est du
+     code neuf. Licence **ODbL → attribution obligatoire**.
+2. **BD TOPO (IGN)** — thème « Services et activités » (couches `etablissement_de_sante`, `enseignement`,
+   `point_d_activite_ou_d_interet`). **Même plateforme `data.geopf.fr` qu'Admin Express** (Lot 3 : on
+   connaît le pattern d'URL et les gotchas 7z/`chmod`). GeoPackage départemental, licence **Etalab**.
+3. **ICPE / Seveso via Géorisques** — sous-ensemble à **fort enjeu** (cible « exploitants de sites »).
+   CSV + Shapefile, **mise à jour quotidienne**, inclut Seveso seuil haut/bas. ⚠️ champ **précision de
+   géolocalisation** variable (parfois centroïde commune, parfois adresse géocodée) → à filtrer/qualifier
+   (P5). Aussi sur data.gouv.fr (« Base des installations classées (ICPE) »).
+
+**Démarrage (étape 2 du dev, §6) :** OSM via **Overpass sur la bbox Gironde-ouest** (celle du Lot 3) →
+petite fixture GeoJSON, comme pour les communes. BD TOPO + Géorisques en sources 2-3.
 
 ### 2.3 Fraîcheur et déduplication (P5 — responsabilité)
 
