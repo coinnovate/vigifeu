@@ -75,37 +75,61 @@ Clé d'idempotence = (`source`, `source_ref`). Ré-import = upsert.
 
 ---
 
-## 3. Couplage feu ↔ POI
+## 3. Couplages spatiaux — deux relations distinctes
 
-**Réutilise `engine/relations.py`** (Lot 3) : STRtree en Lambert-93, proximité à l'**union des cellules**
-du feu (pas le hull), rayons {emprise, <5, <10, <20 km} — exactement comme les relations feu↔commune.
-**Aucune machinerie spatiale nouvelle.**
+**Réutilise `engine/relations.py`** (Lot 3, STRtree en Lambert-93) — **aucune machinerie spatiale nouvelle.**
+Deux couplages, pour deux surfaces :
 
-- Table `fe_poi_rel` — sœur de `fe_commune_rel` : (`fire_event_id`, `poi_id`, `rel_type`,
-  `valid_from`, `valid_to`), historisée open/close comme les relations communales.
-- Câblage dans `process_cycle` (nouvelle étape, à côté du calcul des relations communales).
-- Émission vers `regen_queue` du feu concerné quand ses relations POI changent (comme les communes, Lot 3).
+**3.1 Feu ↔ POI** (fiche feu) : proximité à l'**union des cellules** du feu (pas le hull), rayons
+{**emprise**, <5, <10, <20 km} — exactement comme les relations feu↔commune. Le palier `emprise` = POI
+**dans la zone détectée** (traité à part, §4).
+- Table `fe_poi_rel` — sœur de `fe_commune_rel` : (`fire_event_id`, `poi_id`, `rel_type`, `valid_from`,
+  `valid_to`), historisée open/close comme les relations communales.
+- Câblage dans `process_cycle` (à côté des relations communales), émission `regen_queue` du feu quand ses
+  relations POI changent.
+
+**3.2 Commune ↔ POI** (fiche commune) : **point-dans-polygone** — quels POI sont **dans** chaque commune,
+pour le recensement permanent des enjeux (§4). Indépendant des feux.
+- Table `commune_poi` : (`code_insee`, `poi_id`) — quasi-statique, recalculée à l'import d'un référentiel
+  POI ou communes (comme les relations quasi-statiques du Lot 3), pas à chaque cycle.
+- Contre le STRtree communes déjà en place.
 
 ---
 
-## 4. Affichage public — prudent, jamais nominatif riche
+## 4. Affichage public — prudent, jamais nominatif ni impact affirmé
 
-- Les POI sont **contextuels à un feu**, **pas** un calque national exhaustif (bruit, poids).
-- **Sur la fiche feu publique** (Spec 03 §3.3, « POI majeurs sur la carte du feu ») : les POI majeurs
-  près de l'emprise, sur la carte + une **phrase de qualification** agrégée.
-- **Décision (Spec 05, 2026-07-31) : au public, enjeu PRUDENT / AGRÉGÉ, PAS de nominatif riche/chiffré.**
+**Trois surfaces, trois traitements** (les POI sont **contextuels**, jamais un calque national exhaustif) :
+
+- **Carte nationale : NON** — bruit, poids, et ce serait « la carte des sites vulnérables » en permanence.
+- **Fiche feu : OUI** (Spec 03 §3.3) — POI proches ou dans l'emprise (`fe_poi_rel`), sur la carte
+  (marqueurs par catégorie, agrégés, sans étiquette nominative) + **phrase de qualification agrégée**.
+- **Fiche commune : OUI** — **recensement agrégé permanent** des enjeux de la commune (`commune_poi`, §3.2),
+  au même titre que l'historique BDIFF et le contexte sécheresse (valeur hors-saison / SEO).
+
+**Décision (Spec 05, 2026-07-31) : au public, enjeu PRUDENT / AGRÉGÉ, PAS de nominatif riche/chiffré, et
+JAMAIS d'impact affirmé.** Le palier le plus fort (« dans la zone détectée ») exige le **plus** de prudence :
+l'emprise = union de **cellules de détection grossières** ; un POI dedans signifie *une cellule où il y a
+eu détection recouvre son emplacement*, **pas** qu'il a brûlé. Affirmer un dommage sur un établissement
+(nommé de surcroît) qu'on ne peut vérifier au satellite est l'over-claim que P0 interdit. La fraîcheur
+(§2.3) compte le plus à ce palier (un camping fermé faussement « dans le feu » = pire cas).
 
 Lexique contractuel (Spec 03 §1 P3) :
 
 | Situation (donnée) | Libellé public autorisé | Interdit au public |
 |---|---|---|
-| POI sensibles à proximité | « {N} campings et {M} établissements scolaires dans un rayon de {5} km » | « camping *{nom}*, {3 500} places, à {2} km » |
+| POI dans l'emprise (`rel_type=emprise`) | « Dans la zone détectée du feu : {N} campings, {M} écoles » | « le camping *{nom}* a brûlé / a été atteint / est détruit » |
+| POI à proximité (`<5 km`) | « À proximité (moins de {5} km) : {N} campings et {M} établissements scolaires » | « camping *{nom}*, {3 500} places » ; « menacé », « en danger » |
 | Aucun POI sensible détecté | « Aucun établissement sensible recensé à proximité » (+ réserve de fraîcheur) | affirmer une absence sans réserve |
+| Recensement commune (`commune_poi`) | « Enjeux sensibles recensés dans la commune : {N} campings, {M} écoles, {K} sites Seveso » | tout libellé nominatif ou d'impact |
+| Réserve (méthodo + encadré) | « Zone détectée par satellite (cellule ~{X} m) — ne préjuge pas de dégâts. » | affirmer un impact non confirmé |
 
-- L'**enjeu nommé + chiffré** (« camping de 3 500 places à 2 km ») est une **feature abonné** (Spec 08),
-  sous limitation de responsabilité contractuelle. Même partage gratuit/payant que la courbe MTG (Spec 05 §2.7).
-- Sur la **carte de fiche** : marqueurs de POI majeurs (agrégés / catégorie), pas d'étiquette nominative.
-- La page méthodologie documente la **réserve de fraîcheur** (esprit « plus détecté ≠ éteint », Spec 03 §1 P6).
+- L'**enjeu nommé + chiffré** (« camping de 3 500 places à 2 km ») et le nominatif « votre site est dans la
+  zone détectée — vérifiez auprès des secours » sont des **features abonné** (Spec 08), sous limitation de
+  responsabilité contractuelle. Même partage gratuit/payant que la courbe MTG (Spec 05 §2.7).
+- Sur la **carte de fiche** : marqueurs par catégorie, agrégés ; le POI **dans l'emprise** est rendu à
+  l'intérieur du polygone (distinct des marqueurs alentour).
+- La page méthodologie documente la **réserve de fraîcheur** et la coarseness de l'emprise (esprit
+  « plus détecté ≠ éteint », Spec 03 §1 P6).
 
 ---
 
@@ -148,26 +172,38 @@ avec l'emprise.
 
 ## 6. Étapes de développement (petits pas, tests au fil, commits FR)
 
-1. **Migration `poi`** (table §2.1) + **`fe_poi_rel`** (§3). Une migration, rien d'autre.
+1. **Migration** — table `poi` (§2.1) + `fe_poi_rel` (§3.1) + `commune_poi` (§3.2). Une migration.
 2. **Importeur OSM** — `referentiels/poi_osm.py` : extrait Geofabrik filtré ou Overpass OSM, upsert
    idempotent par (`source`, `source_ref`). Fixture sur la bbox Gironde-ouest (Lot 3, déjà là).
 3. **Relation feu↔POI** — extension de `engine/relations.py` + `fe_poi_rel` historisée, câblée dans
-   `process_cycle`, émission `regen_queue`.
-4. **Qualification agrégée sur la fiche** — lexique `fr.phrase_enjeux_poi(counts)` (§4). **Public prudent
-   seulement.** Golden Saumos régénéré.
-5. **POI majeurs sur la carte du feu** (Spec 03 §3.3) — marqueurs agrégés.
-6. **2ᵉ et 3ᵉ sources** — importeur BD TOPO (dédup vs OSM), puis Géorisques/ICPE-Seveso.
-7. **Imagerie — cran léger** : calque GIBS daté sur la carte de fiche (§5).
-8. **Fraîcheur** — cadence de ré-import + provenance datée (§2.3).
+   `process_cycle`, émission `regen_queue`. **Distinguer le palier `emprise` (dans la zone) des rayons.**
+4. **Relation commune↔POI** — `commune_poi` (point-dans-polygone), recalculée à l'import (quasi-statique).
+5. **Qualification agrégée sur la fiche feu** — lexique `fr.phrase_enjeux_poi(counts)` (§4), avec ligne
+   distincte « dans la zone détectée » vs « à proximité ». **Public prudent seulement.** Golden régénéré.
+6. **Recensement communal sur la fiche commune** — phrase agrégée `commune_poi` (§4).
+7. **POI majeurs sur la carte du feu** (Spec 03 §3.3) — marqueurs agrégés par catégorie ; POI dans
+   l'emprise rendu à l'intérieur du polygone.
+8. **2ᵉ et 3ᵉ sources** — importeur BD TOPO (dédup vs OSM), puis Géorisques/ICPE-Seveso.
+9. **Imagerie — cran léger** : calque GIBS daté sur la carte de fiche (§5).
+10. **Fraîcheur** — cadence de ré-import + provenance datée (§2.3).
 
-**Jalon J-POI :** un feu réel affiche un enjeu public agrégé correct (rejeu Saumos : « N campings dans
-5 km »), relations `fe_poi_rel` cohérentes, golden vert.
+**Jalon J-POI :** un feu réel affiche un enjeu public agrégé correct (rejeu Saumos : « dans la zone
+détectée : … » + « à proximité : … »), une fiche commune affiche son recensement d'enjeux, relations
+`fe_poi_rel` / `commune_poi` cohérentes, golden vert.
 
 ---
 
-## 7. Questions ouvertes
+## 7. Décisions & questions ouvertes
 
-- `OUVERT` : jeu de catégories POI exact de la v1 (au-delà de camping/école/hôpital/station-service/ICPE).
-- `OUVERT` : rayon(s) affichés au public (5 km ? plusieurs paliers ?) et seuil « POI majeur » sur la carte.
-- `OUVERT` : cadence de ré-import par source (§2.3).
-- `OUVERT` : cran 2 imagerie Sentinel-2 (traitement de scène, stockage).
+**Décidé (2026-07-31) :**
+- **Catégories v1** : campings · établissements scolaires · hôpitaux/EHPAD · stations-service · ICPE-Seveso.
+  Élargissement (villages vacances, ERP, captages…) en v1.1.
+- **Affichage** : carte nationale NON ; fiche feu OUI (proximité + dans la zone) ; fiche commune OUI
+  (recensement agrégé permanent). Public agrégé, jamais nominatif ni impact affirmé (§4).
+- **Hors v1** : enjeux linéaires (axes routiers) et surfaciques (zones urbanisées) — data d'une autre forme.
+
+**`OUVERT` :**
+- rayon(s) affichés au public (5 km ? plusieurs paliers ?) et seuil « POI majeur » sur la carte ;
+- résolution `{X} m` à citer dans la réserve d'emprise (§4) ;
+- cadence de ré-import par source (§2.3) ;
+- cran 2 imagerie Sentinel-2 (traitement de scène, stockage).
