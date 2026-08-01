@@ -211,8 +211,10 @@ class PoiIndex:
 
 
 def build_poi_index(conn: sqlite3.Connection) -> PoiIndex:
+    # Seuls les POI CANONIQUES (superseded_by IS NULL) : un doublon inter-sources ne doit
+    # pas générer une relation feu↔POI en double (Spec 06 §2.3, dédup migration 005).
     ids, pts = [], []
-    for r in conn.execute("SELECT id, lat, lon FROM poi").fetchall():
+    for r in conn.execute("SELECT id, lat, lon FROM poi WHERE superseded_by IS NULL").fetchall():
         x, y = geo.project(r["lat"], r["lon"])
         ids.append(r["id"])
         pts.append(Point(x, y))
@@ -220,7 +222,11 @@ def build_poi_index(conn: sqlite3.Connection) -> PoiIndex:
 
 
 def get_poi_index(conn: sqlite3.Connection) -> PoiIndex:
-    count = conn.execute("SELECT COUNT(*) AS n FROM poi").fetchone()["n"]
+    # Clé de cache = nombre de POI canoniques : change à l'import (insertions) ET à la dédup
+    # (une passe qui marque des superseded_by fait varier ce compte → l'index se rebâtit).
+    count = conn.execute(
+        "SELECT COUNT(*) AS n FROM poi WHERE superseded_by IS NULL"
+    ).fetchone()["n"]
     cached = _POI_INDEX_CACHE.get(id(conn))
     if cached and cached[0] == count:
         return cached[1]
@@ -321,7 +327,9 @@ def recompute_commune_poi(conn: sqlite3.Connection) -> dict:
         conn.commit()
         return {"pairs": 0}
     pairs = 0
-    for r in conn.execute("SELECT id, lat, lon FROM poi").fetchall():
+    # POI canoniques seulement : le recensement communal ne double-compte pas un doublon
+    # inter-sources (Spec 06 §2.3).
+    for r in conn.execute("SELECT id, lat, lon FROM poi WHERE superseded_by IS NULL").fetchall():
         x, y = geo.project(r["lat"], r["lon"])
         pt = Point(x, y)
         for code, geom in cidx.query(pt):
@@ -334,3 +342,66 @@ def recompute_commune_poi(conn: sqlite3.Connection) -> dict:
                 break
     conn.commit()
     return {"pairs": pairs}
+
+
+def recompute_poi_dedup(conn: sqlite3.Connection, config: dict) -> dict:
+    """Déduplique le référentiel POI INTER-sources (Spec 06 §2.3) → `poi.superseded_by`.
+
+    Un même enjeu physique (même catégorie) présent dans plusieurs sources — typiquement un
+    camping dans OSM ET BD TOPO — ne doit compter qu'une fois. On garde le POI de la source la
+    plus prioritaire (config `[poi].source_priority` : fraîcheur/qualité) ; les autres pointent
+    vers lui via `superseded_by` (jamais supprimés, P1). **Inter-source seulement** : deux POI
+    de la MÊME source proches sont deux enjeux distincts, pas un doublon.
+
+    Recompute complet, déterministe et idempotent (comme `recompute_commune_poi`) : on repart
+    de superseded_by=NULL et on retraite dans l'ordre de priorité, indépendamment de l'ordre
+    d'import. Rejouable sans effet de bord.
+    """
+    radius = config["poi"]["dedup_radius_m"]
+    priority = config["poi"].get("source_priority") or []
+    rank = {src: i for i, src in enumerate(priority)}
+    fallback = len(priority)  # source hors liste = priorité la plus faible
+
+    conn.execute("UPDATE poi SET superseded_by = NULL")  # repart de zéro (déterministe)
+
+    rows = conn.execute("SELECT id, source, category, lat, lon FROM poi").fetchall()
+    superseded: dict[int, int] = {}  # poi_id doublon -> poi_id canonique
+    # Par catégorie : STRtree des points L93 + traitement en ordre de priorité.
+    by_cat: dict[str, list[dict]] = {}
+    for r in rows:
+        x, y = geo.project(r["lat"], r["lon"])
+        by_cat.setdefault(r["category"], []).append(
+            {"id": r["id"], "source": r["source"], "pt": Point(x, y)}
+        )
+
+    for items in by_cat.values():
+        pts = [it["pt"] for it in items]
+        tree = STRtree(pts) if pts else None
+        if tree is None:
+            continue
+        order = sorted(
+            range(len(items)),
+            key=lambda i: (rank.get(items[i]["source"], fallback), items[i]["id"]),
+        )
+        claimed: set[int] = set()  # indices déjà rattachés à un canonique
+        for i in order:
+            if i in claimed:
+                continue
+            # items[i] devient canonique : il absorbe ses voisins d'une AUTRE source, non encore
+            # rattachés, dans le rayon. L'ordre de priorité garantit qu'aucun voisin non rattaché
+            # n'est plus prioritaire que i (il l'aurait déjà absorbé).
+            for j in tree.query(items[i]["pt"].buffer(radius)):
+                j = int(j)
+                if j == i or j in claimed:
+                    continue
+                if items[j]["source"] == items[i]["source"]:
+                    continue  # même source = enjeux distincts, pas un doublon
+                if items[i]["pt"].distance(items[j]["pt"]) <= radius:
+                    claimed.add(j)
+                    superseded[items[j]["id"]] = items[i]["id"]
+
+    for dup_id, canon_id in superseded.items():
+        conn.execute("UPDATE poi SET superseded_by = ? WHERE id = ?", (canon_id, dup_id))
+    conn.commit()
+    invalidate_poi_index(conn)  # l'ensemble canonique a changé
+    return {"superseded": len(superseded), "canonical": len(rows) - len(superseded)}

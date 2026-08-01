@@ -17,7 +17,8 @@
                                   — importe le référentiel commune (GeoPackage/GeoJSON)
   vigifeu bdiff-import PATH [--replace]
                                   — importe l'historique BDIFF (CSV, cumulatif ; --replace efface d'abord)
-  vigifeu poi-import PATH          — importe le référentiel POI (JSON Overpass OSM) + recense par commune
+  vigifeu poi-import PATH [--source osm|bdtopo|georisques]
+                                  — importe une source du référentiel POI (défaut osm) + dédup inter-sources + recense par commune
   vigifeu contexte                — tire drought/vigieau des communes concernées (flags config)
   vigifeu generer [--limit N]     — régénère les pages en attente dans regen_queue (Lot 4)
   vigifeu rebuild                 — régénère TOUT le HTML (après un changement de gabarit)
@@ -229,16 +230,37 @@ def cmd_bdiff_import(path: str, replace: bool) -> None:
     )
 
 
-def cmd_poi_import(path: str) -> None:
-    from vigifeu.engine.relations import recompute_commune_poi
-    from vigifeu.referentiels.poi_osm import import_poi_osm
+def cmd_poi_import(path: str, source: str | None) -> None:
+    """Importe une source du référentiel POI, puis déduplique et recense par commune.
 
+    `--source osm` (défaut) / `bdtopo` / `georisques`. Chaque source s'importe
+    indépendamment (upsert par clé naturelle) ; la dédup inter-sources et le recensement
+    communal sont recalculés après chaque import (idempotents, Spec 06 §2.3/§3.2).
+    """
+    from vigifeu.engine.relations import recompute_commune_poi, recompute_poi_dedup
+
+    src = (source or "osm").lower()
     conn, config = _open()
-    res = import_poi_osm(conn, path, config)
+    if src == "osm":
+        from vigifeu.referentiels.poi_osm import import_poi_osm
+        res = import_poi_osm(conn, path, config)
+    elif src == "bdtopo":
+        from vigifeu.referentiels.poi_bdtopo import import_poi_bdtopo
+        res = import_poi_bdtopo(conn, path, config)
+    elif src == "georisques":
+        from vigifeu.referentiels.poi_georisques import import_poi_georisques
+        res = import_poi_georisques(conn, path, config)
+        res.setdefault("by_category", {"icpe_seveso": res["upserted"]})
+    else:
+        print(f"source POI inconnue : {src} (osm/bdtopo/georisques)", file=sys.stderr)
+        sys.exit(1)
+
+    dedup = recompute_poi_dedup(conn, config)
     census = recompute_commune_poi(conn)
     cats = ", ".join(f"{k}={v}" for k, v in sorted(res["by_category"].items())) or "aucune"
     print(
-        f"POI OSM : {res['upserted']} importés ({cats}), {res['skipped']} ignorés ; "
+        f"POI {src} : {res['upserted']} importés ({cats}), {res['skipped']} ignorés ; "
+        f"dédup : {dedup['superseded']} doublons masqués ({dedup['canonical']} canoniques) ; "
         f"recensement commune : {census['pairs']} rattachements"
     )
 
@@ -349,7 +371,7 @@ def main() -> None:
         case "bdiff-import":
             cmd_bdiff_import(rest[0], "--replace" in rest)
         case "poi-import":
-            cmd_poi_import(rest[0])
+            cmd_poi_import(rest[0], _flag(rest, "source"))
         case "contexte":
             cmd_contexte()
         case "generer":
