@@ -80,7 +80,7 @@ Les assistants IA citent les sources qui leur donnent des **faits datés, sourc�
   * commune : `Place` / `AdministrativeArea` avec `geo`, population, liens feux ;
   * éditeur : `Organization` (nom, logo, mentions) sur toutes les pages ;
   * méthodologie : `FAQPage` (définitions des libellés : « que signifie “plus détecté” ? ») — format directement exploitable par les moteurs classiques et génératifs.
-* **Crawlers IA autorisés** : robots.txt ouvre explicitement GPTBot, ClaudeBot, PerplexityBot, Google-Extended, etc. La visibilité dans les assistants est un canal d'acquisition, pas une fuite — le socle public est fait pour être cité (la valeur payante est ailleurs : sites déclarés, alertes, API).
+* **Crawlers IA autorisés** : robots.txt ouvre explicitement GPTBot, ClaudeBot, PerplexityBot, Google-Extended, etc. La visibilité dans les assistants est un canal d'acquisition, pas une fuite — le socle public est fait pour être cité (la valeur payante est ailleurs : sites déclarés, notifications, API).
 * **`llms.txt`** à la racine : description du site, de la sémantique des libellés, des sources et de la licence de citation souhaitée (« citer avec la date d'observation et le lien »). Coût nul, adoption croissante.
 * **Flux Atom/RSS** : `feux.xml` (nouveaux feux publiés et changements majeurs) — consommé par les rédactions et par des agrégateurs, multiplie les chemins de découverte.
 * **Page méthodologie comme signal de fiabilité** (cadrage §15bis) : sources primaires nommées, latence chiffrée, limites explicites — les critères mêmes qu'un moteur génératif applique pour choisir qui citer.

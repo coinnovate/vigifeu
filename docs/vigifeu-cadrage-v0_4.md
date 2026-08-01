@@ -173,7 +173,7 @@ Empilement de sources, du plus opérationnel au plus structurel :
 * POI : OpenStreetMap (campings, écoles, hôpitaux, stations-service — couverture correcte en Europe de l'Ouest) complété par les bases nationales (BD TOPO) ;
 * routes, forêts, réserves naturelles, infrastructures, établissements sensibles, entreprises.
 
-**Enjeu qualité :** le vrai travail n'est pas l'accès mais la fraîcheur et la qualification. Un camping OSM fermé depuis trois ans qui reçoit des alertes détruit la crédibilité auprès d'un client payant.
+**Enjeu qualité :** le vrai travail n'est pas l'accès mais la fraîcheur et la qualification. Un camping OSM fermé depuis trois ans qui reçoit des notifications détruit la crédibilité auprès d'un client payant.
 
 ## 5.6 Sites déclarés par les clients (donnée cœur)
 
@@ -235,7 +235,7 @@ Le prototype (section 7bis) a permis de mesurer la latence sur le plus gros feu 
 
 Les publications scientifiques montrent que FEDS réalise déjà : regroupement des hotspots, suivi d'un incendie, calcul de périmètre, évolution temporelle, front actif. Le flux opérationnel complet reste principalement disponible pour l'Amérique du Nord ; pour l'Europe, nous développons notre propre moteur de regroupement à partir des hotspots VIIRS. Ce point est confirmé comme non bloquant (le prototype le réalise, cf. 7bis).
 
-Le vrai défi n'est pas le clustering mais la **qualification** : FIRMS est plein de faux positifs (torchères industrielles, brûlages agricoles, panneaux solaires, aciéries). Le filtre « est-ce un vrai feu de végétation qui mérite une alerte ? » fait la différence entre un produit crédible et un produit qui spamme ses clients.
+Le vrai défi n'est pas le clustering mais la **qualification** : FIRMS est plein de faux positifs (torchères industrielles, brûlages agricoles, panneaux solaires, aciéries). Le filtre « est-ce un vrai feu de végétation qui mérite une notification ? » fait la différence entre un produit crédible et un produit qui spamme ses clients.
 
 ## 7.1 Taxonomie de qualification à trois signatures (nouveau — issue de l'observation)
 
@@ -298,7 +298,7 @@ Chaque incendie est un objet vivant contenant :
 * statistiques
 * statut de qualification (confirmé végétation / suspect source fixe / suspect détection isolée / faux positif) selon la taxonomie 7.1
 
-Autour se greffent : météo (horodatée de manière cohérente avec les détections), communes concernées (multi-communes, par intersection), infrastructures, alertes.
+Autour se greffent : météo (horodatée de manière cohérente avec les détections), communes concernées (multi-communes, par intersection), infrastructures, notifications.
 
 ## 8.2 Commune
 
@@ -335,7 +335,7 @@ Décisions arrêtées pour la phase actuelle (pré-SaaS) :
 * **Ingestion continue en tâche de fond** : collecte permanente des sources (FIRMS jour par jour, MTG à terme), stockage local — jamais de requête aux sources au moment de la consultation. Motivation constatée : les sources ralentissent précisément les jours de grands feux ; robustesse quotas/timeouts/retries intégrée dès l'ingestion.
 * **État vivant : SQLite** (mode WAL — un processus écrivain d'ingestion, des lecteurs), contenant les FireEvents en cours (7–14 jours glissants), le référentiel communal et les relations précalculées. Volumes dérisoires à l'échelle France (~1–2 M hotspots/an) : SQLite est largement dans sa zone de confort. SpatiaLite en option pour le spatial.
 * **Archive : fichiers Parquet partitionnés par jour/mois** (GeoParquet pour les géométries), interrogés par DuckDB. L'archive n'est pas un grenier, c'est un produit : l'historique doit rester *requêtable* (fiches communes décennales, analyse d'exposition, valeur hors saison) sans serveur ni rechargement.
-* **Cible SaaS : PostgreSQL + PostGIS** pour l'état vivant, le jour où arrivent clients multiples, API, workers d'alertes et sites déclarés. Le critère décisif n'est pas le « relationnel » mais le **spatial** (point-dans-polygone contre 35 000 communes, distances indexées, intersections) — PostGIS est le standard du métier. Migration triviale si le schéma est propre ; l'archive Parquet ne bouge pas.
+* **Cible SaaS : PostgreSQL + PostGIS** pour l'état vivant, le jour où arrivent clients multiples, API, workers de notifications et sites déclarés. Le critère décisif n'est pas le « relationnel » mais le **spatial** (point-dans-polygone contre 35 000 communes, distances indexées, intersections) — PostGIS est le standard du métier. Migration triviale si le schéma est propre ; l'archive Parquet ne bouge pas.
 * **Historiser dès le premier jour ce qui ne se reconstruit pas** : heure d'ingestion de chaque hotspot (mesure de latence), versions successives des FireEvents (relecture de propagation), relation feu-commune horodatée. Le choix du moteur est réversible à tout moment ; ces données-là, non.
 
 ## 8.5 Site : génération statique événementielle (nouveau)
@@ -344,7 +344,7 @@ Principe : les données arrivent par paquets (passages satellite), pas en contin
 
 * **Régénération sélective** : après un passage, seules changent la carte nationale, les fiches des feux actifs et les fiches des communes concernées (quelques dizaines de pages) ; les fiches « rien à signaler » gardent leur version (régénération nocturne ou à la demande).
 * **Horodatage honnête** : cf. 8.3 — timestamps absolus de la donnée dans la page, durées relatives calculées côté client.
-* **Deux couches** : socle public pré-généré (cartes, fiches feux, fiches communes) + couche personnalisée servie dynamiquement (future partie abonnés — sites déclarés, alertes, portefeuilles : dynamique par nature et confidentielle, jamais dans un cache partagé).
+* **Deux couches** : socle public pré-généré (cartes, fiches feux, fiches communes) + couche personnalisée servie dynamiquement (future partie abonnés — sites déclarés, notifications, portefeuilles : dynamique par nature et confidentielle, jamais dans un cache partagé).
 * Le schéma tient à l'arrivée du flux MTG (10 min) : seules les fiches des feux actifs se régénèrent plus souvent, pas le socle.
 * Bénéfice induit : les fiches communes statiques sont indexables — acquisition organique hors saison (« historique incendies <commune> »).
 
@@ -378,8 +378,8 @@ Situation en cours, historique, exposition, réglementaire, contexte sécheresse
 ## Historique
 Relecture de la propagation (versions successives du FireEvent) ; historique communal pluriannuel.
 
-## Alertes
-Notification lorsqu'un incendie apparaît, s'approche d'un site surveillé ou évolue fortement — avec délai de détection affiché honnêtement.
+## Notifications
+Notification lorsqu'un incendie apparaît, s'approche d'un site surveillé ou évolue fortement — avec délai de détection affiché honnêtement. **Notifications B2B contractualisées, aide à la décision — jamais un dispositif d'alerte grand public ni de sécurité des personnes (cf. Spec 05 §0).**
 
 ## Analyse géographique
 Quelles communes ? quels campings ? quels établissements ? quels clients ? quels axes routiers ?
@@ -416,7 +416,7 @@ L'architecture multi-confiance (5.7) préserve néanmoins la possibilité de bra
 # 11. Paysage concurrentiel
 
 ## EFFIS (Copernicus) — gratuit
-Suivi de feux actifs à l'échelle européenne, FWI quotidien. **La réponse à « pourquoi payer alors qu'EFFIS existe ? » doit être limpide dès le premier pitch** : EFFIS montre les feux (les mêmes hotspots NASA, redistribués), Vigifeu dit qui est concerné (sites du client, communes, alertes personnalisées, API, interprétation métier).
+Suivi de feux actifs à l'échelle européenne, FWI quotidien. **La réponse à « pourquoi payer alors qu'EFFIS existe ? » doit être limpide dès le premier pitch** : EFFIS montre les feux (les mêmes hotspots NASA, redistribués), Vigifeu dit qui est concerné (sites du client, communes, notifications personnalisées, API, interprétation métier).
 
 ## OroraTech (Munich)
 Wildfire monitoring avec nanosatellites propriétaires. Valide le marché ; positionné sur la détection, pas sur la couche métier communale européenne.
@@ -491,7 +491,7 @@ Vigifeu vend :
 
 * une **traduction** : de la donnée satellitaire et météo vers une réponse métier (« suis-je concerné ? ») ;
 * une **granularité communale** que personne ne fournit ;
-* une veille opérationnelle et des alertes personnalisées sur les sites du client ;
+* une veille opérationnelle et des notifications personnalisées sur les sites du client ;
 * une rigueur de données de niveau contractuel ;
 * un éditeur identifié et un cadre juridique clair.
 
@@ -550,7 +550,7 @@ La responsabilité de l'éditeur ne pourra être engagée en cas : d'erreur dans
 L'utilisateur reconnaît utiliser Vigifeu comme un outil complémentaire d'information. Il conserve l'entière responsabilité des mesures de prévention, d'évacuation ou de gestion de crise qu'il décide de mettre en œuvre.
 
 ## Article 9 – Données déclarées par l'utilisateur
-Les sites, actifs et périmètres déclarés par l'utilisateur le sont sous sa responsabilité. L'exactitude de leur géolocalisation conditionne la pertinence des analyses et alertes.
+Les sites, actifs et périmètres déclarés par l'utilisateur le sont sous sa responsabilité. L'exactitude de leur géolocalisation conditionne la pertinence des analyses et notifications.
 
 ---
 

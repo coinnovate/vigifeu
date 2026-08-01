@@ -134,7 +134,7 @@ Valeurs initiales : `E_mobile = 400 m`, `N_franc = 8` (un feu franc dès son pre
 
 ### 5.2 Publication
 
-Seuls les `vegetation_confirme` reçoivent un `public_id` et une page. Les signaux de niveau `probable` (MTG seul, phase 2) apparaissent **sur la carte nationale uniquement**, sans `public_id` ni fiche, avec leur libellé dédié (Spec 03 §5) ; ils obtiennent page et identifiant à la confirmation VIIRS. Le seuil de publication est distinct du seuil d'alerte future (les abonnés pourront choisir d'être notifiés dès `probable` sur leurs sites — hors périmètre v1).
+Seuls les `vegetation_confirme` reçoivent un `public_id` et une page. Les signaux de niveau `probable` (MTG seul, phase 2) apparaissent **sur la carte nationale uniquement**, sans `public_id` ni fiche, avec leur libellé dédié (Spec 03 §5) ; ils obtiennent page et identifiant à la confirmation VIIRS. Le seuil de publication est distinct du seuil de notification future (les abonnés pourront choisir d'être notifiés dès `probable` sur leurs sites — hors périmètre v1).
 
 ### 5.3 Boucle d'amélioration
 
