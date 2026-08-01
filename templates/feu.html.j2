@@ -87,6 +87,22 @@
 </section>
 {% endif %}
 
+{# Enjeux sensibles à proximité (Spec 06 §4) — AGRÉGÉ, jamais nominatif ni impact.
+   Section absente tant qu'aucun référentiel POI n'est chargé (dégradé, pas d'affirmation
+   d'absence sans référentiel — P6). #}
+{% if enjeux_poi or not enjeux_indispo %}
+<section class="enjeux">
+<h2>Enjeux sensibles à proximité</h2>
+{% if enjeux_poi %}
+{% for p in enjeux_poi %}
+<p>{{ p }}.</p>
+{% endfor %}
+{% else %}
+<p class="calme">Aucun établissement sensible recensé à proximité.</p>
+{% endif %}
+<p class="note">{{ enjeux_reserve }}</p>
+</section>
+{% endif %}
 {# 3.5 Chronologie + 3.6 intensité par passage — antichronologique, jour/nuit distingués #}
 {% if chronologie %}
 <section class="chronologie">

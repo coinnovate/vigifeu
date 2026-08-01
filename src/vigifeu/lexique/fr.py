@@ -363,6 +363,48 @@ def phrase_vent_communes(dir_origine_deg: float, communes, *, heure: str) -> str
 
 
 # --------------------------------------------------------------------------- #
+# 2.3bis — Enjeux à proximité (POI, Spec 06 §4) — public AGRÉGÉ, jamais nominatif #
+# --------------------------------------------------------------------------- #
+
+# Catégories v1 (Spec 05 §7) → libellé (singulier, pluriel). Ordre d'affichage fixe.
+_ENJEU_LABELS = {
+    "camping": ("camping", "campings"),
+    "ecole": ("établissement scolaire", "établissements scolaires"),
+    "hopital": ("hôpital", "hôpitaux"),
+    "ehpad": ("EHPAD", "EHPAD"),
+    "station_service": ("station-service", "stations-service"),
+    "icpe_seveso": ("site Seveso", "sites Seveso"),
+}
+
+
+def _enjeu_item(category: str, n: int) -> str:
+    sing, plur = _ENJEU_LABELS.get(category, (category, category))
+    return f"{n} {sing if n == 1 else plur}"
+
+
+def phrase_enjeux_poi(tier: str, counts: dict) -> str:
+    """Énoncé AGRÉGÉ des enjeux d'un palier (Spec 06 §4). Jamais de nom ni de capacité.
+
+    `tier` = 'emprise' (dans la zone détectée) ou 'proximite' (moins de 5 km). `counts` =
+    {catégorie: nombre}. Chaîne vide si aucun enjeu. Aucun impact affirmé (P0) : « dans la
+    zone détectée » est une observation de cellule, pas un constat de dégât."""
+    items = [_enjeu_item(cat, counts[cat]) for cat in _ENJEU_LABELS if counts.get(cat)]
+    if not items:
+        return ""
+    corps = _liste_fr(items)
+    if tier == "emprise":
+        return f"Dans la zone détectée du feu : {corps}"
+    return f"À proximité (moins de 5 km) : {corps}"
+
+
+def note_enjeux_poi() -> str:
+    """Réserve affichée sous les enjeux (Spec 06 §4 / P0) : ni impact, ni nominatif."""
+    return ("Établissements sensibles recensés à partir de données publiques "
+            "(OpenStreetMap, IGN) ; leur présence à proximité ne préjuge pas de dégâts — "
+            "une zone détectée par satellite est une observation, pas un constat sur place.")
+
+
+# --------------------------------------------------------------------------- #
 # 2.4 — Prévisions météorologiques (catégorie `prevue`)                       #
 # --------------------------------------------------------------------------- #
 

@@ -73,6 +73,36 @@ def _hotspot_count(conn, event_id):
     ).fetchone()["n"]
 
 
+def _enjeux_poi(conn, event_id):
+    """Enjeux POI AGRÉGÉS par palier (emprise, < 5 km), phrases via le lexique (Spec 06 §4).
+
+    Public prudent : comptes par catégorie, jamais de nom ni de capacité. Les paliers
+    10/20 km ne sont pas surfacés (faible signal comme enjeu ; ils restent en base)."""
+    rows = conn.execute(
+        "SELECT r.rel_type, p.category, COUNT(*) AS n "
+        "FROM fe_poi_rel r JOIN poi p ON p.id = r.poi_id "
+        "WHERE r.fire_event_id=? AND r.valid_to IS NULL "
+        "GROUP BY r.rel_type, p.category",
+        (event_id,),
+    ).fetchall()
+    tiers: dict[str, dict] = {"emprise": {}, "a_moins_de_5km": {}}
+    for r in rows:
+        if r["rel_type"] in tiers:
+            tiers[r["rel_type"]][r["category"]] = r["n"]
+    phrases = []
+    if tiers["emprise"]:
+        phrases.append(fr.phrase_enjeux_poi("emprise", tiers["emprise"]))
+    if tiers["a_moins_de_5km"]:
+        phrases.append(fr.phrase_enjeux_poi("proximite", tiers["a_moins_de_5km"]))
+    return phrases
+
+
+def _poi_referentiel_charge(conn):
+    """Un référentiel POI est-il chargé ? Sinon la fiche reste en dégradé (pas d'assertion
+    d'absence sans référentiel — Spec 03 P6, comme la sécheresse non armée)."""
+    return conn.execute("SELECT 1 FROM poi LIMIT 1").fetchone() is not None
+
+
 def _latest_progression(conn, event_id):
     """Progression au dernier passage vs le passage comparable précédent (§2.2)."""
     last = conn.execute(
@@ -337,6 +367,11 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
         "synthese": synthese,
         "communes_groupes": _groupes_communes(relations, _REL_PRINCIPAUX),
         "communes_groupes_eloignes": _groupes_communes(relations, _REL_ELOIGNES),
+        # Enjeux POI (Spec 06 §4) : agrégé, jamais nominatif ; section absente tant qu'aucun
+        # référentiel POI n'est chargé (dégradé, pas d'affirmation d'absence — P6).
+        "enjeux_poi": _enjeux_poi(conn, event_id),
+        "enjeux_indispo": not _poi_referentiel_charge(conn),
+        "enjeux_reserve": fr.note_enjeux_poi(),
         "chronologie": _chronologie(conn, config, event_id),
         # Contexte sécheresse : danger Météo des forêts du département (armé) ; dégradé
         # tant que [drought].activated est faux (Spec 03 P6 : l'absence est une info, pas
