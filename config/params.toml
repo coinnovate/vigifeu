@@ -64,6 +64,19 @@ a_vent_deg = 30              # demi-angle du secteur autour de la direction VERS
 d_vent_km = 15               # portée du secteur
 n_hysteresis = 3             # fermeture après N mesures consécutives hors secteur (anti-clignotement)
 
+[poi]
+# Spec 06 §2.2 — import OSM du référentiel POI (enjeux). Catégories v1 (Spec 05 §7).
+# Chaque règle : une catégorie + un jeu de tags OSM à matcher (TOUS présents). Règles
+# évaluées dans l'ordre, première qui matche. ⚠️ « Overpass » ici = l'API OpenStreetMap,
+# rien à voir avec engine/overpass.py (passages satellites). Licence ODbL → attribution.
+osm_rules = [
+    { category = "camping",         match = { tourism = "camping" } },
+    { category = "ecole",           match = { amenity = "school" } },
+    { category = "hopital",         match = { amenity = "hospital" } },
+    { category = "ehpad",           match = { amenity = "social_facility", social_facility = "nursing_home" } },
+    { category = "station_service", match = { amenity = "fuel" } },
+]
+
 [version]
 # Spec 02 §6 — mesures factuelles par version. area_ha = aire de l'enveloppe ×
 # facteur de remplissage (un feu ne brûle pas tout son enveloppe convexe) ;
