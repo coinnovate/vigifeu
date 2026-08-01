@@ -17,6 +17,7 @@
                                   — importe le référentiel commune (GeoPackage/GeoJSON)
   vigifeu bdiff-import PATH [--replace]
                                   — importe l'historique BDIFF (CSV, cumulatif ; --replace efface d'abord)
+  vigifeu poi-import PATH          — importe le référentiel POI (JSON Overpass OSM) + recense par commune
   vigifeu contexte                — tire drought/vigieau des communes concernées (flags config)
   vigifeu generer [--limit N]     — régénère les pages en attente dans regen_queue (Lot 4)
   vigifeu rebuild                 — régénère TOUT le HTML (après un changement de gabarit)
@@ -228,6 +229,20 @@ def cmd_bdiff_import(path: str, replace: bool) -> None:
     )
 
 
+def cmd_poi_import(path: str) -> None:
+    from vigifeu.engine.relations import recompute_commune_poi
+    from vigifeu.referentiels.poi_osm import import_poi_osm
+
+    conn, config = _open()
+    res = import_poi_osm(conn, path, config)
+    census = recompute_commune_poi(conn)
+    cats = ", ".join(f"{k}={v}" for k, v in sorted(res["by_category"].items())) or "aucune"
+    print(
+        f"POI OSM : {res['upserted']} importés ({cats}), {res['skipped']} ignorés ; "
+        f"recensement commune : {census['pairs']} rattachements"
+    )
+
+
 def cmd_generer(limit: int | None) -> None:
     from vigifeu.generate.runner import consume, finalize_site, sync_static
 
@@ -333,6 +348,8 @@ def main() -> None:
             cmd_communes_import(rest[0], _flag(rest, "millesime"), _flag(rest, "layer"))
         case "bdiff-import":
             cmd_bdiff_import(rest[0], "--replace" in rest)
+        case "poi-import":
+            cmd_poi_import(rest[0])
         case "contexte":
             cmd_contexte()
         case "generer":

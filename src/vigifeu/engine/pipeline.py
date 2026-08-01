@@ -27,7 +27,7 @@ from vigifeu.engine.fixed_source import mark_fixed_sources, promote_candidates
 from vigifeu.engine.overpass import rebuild_overpasses
 from vigifeu.engine.qualify import qualify_events
 from vigifeu.engine.regen import enqueue_fire_update
-from vigifeu.engine.relations import compute_commune_relations
+from vigifeu.engine.relations import compute_commune_relations, compute_poi_relations
 from vigifeu.engine.version import create_version
 
 _CONFIRME = "vegetation_confirme"
@@ -58,6 +58,7 @@ def process_cycle(conn: sqlite3.Connection, config: dict, *, stamp: str | None =
 
     versioned: list[int] = []
     relations_opened = relations_closed = 0
+    poi_relations_opened = poi_relations_closed = 0
     for eid in cl["touched"]:
         fe = conn.execute(
             "SELECT qualification, lifecycle FROM fire_event WHERE id=?", (eid,)
@@ -81,6 +82,11 @@ def process_cycle(conn: sqlite3.Connection, config: dict, *, stamp: str | None =
             rel = compute_commune_relations(conn, config, eid, version_id=vid, stamp=stamp)
             relations_opened += rel["opened"]
             relations_closed += rel["closed"]
+            # Étape 8bis (Spec 06 §3.1) : relations feu ↔ POI (enjeux), mêmes paliers.
+            # No-op si aucun POI chargé (garde les cycles sans référentiel POI verts).
+            poi_rel = compute_poi_relations(conn, config, eid, version_id=vid, stamp=stamp)
+            poi_relations_opened += poi_rel["opened"]
+            poi_relations_closed += poi_rel["closed"]
             # Étape 9 (§8) : émettre les pages impactées (feu + carte + communes touchées).
             enqueue_fire_update(conn, eid, rel["communes"], stamp=stamp,
                                 trigger=f"run:{trigger_run_id}" if trigger_run_id else "process_cycle")
@@ -99,6 +105,8 @@ def process_cycle(conn: sqlite3.Connection, config: dict, *, stamp: str | None =
         "versioned": len(versioned),
         "relations_opened": relations_opened,
         "relations_closed": relations_closed,
+        "poi_relations_opened": poi_relations_opened,
+        "poi_relations_closed": poi_relations_closed,
         "lifecycle": life,
     }
 
@@ -126,7 +134,7 @@ def reset_interpretation(conn: sqlite3.Connection, config: dict) -> None:
         # pas NULLable → supprimée ; elle sera rééchantillonnée au prochain cycle).
         conn.execute("DELETE FROM weather_forecast WHERE fire_event_id IS NOT NULL")
         for table in ("fe_hotspot", "weather_obs", "fire_event_version",
-                      "fire_cell_state", "fe_fe_rel", "fe_commune_rel", "fire_event"):
+                      "fire_cell_state", "fe_fe_rel", "fe_commune_rel", "fe_poi_rel", "fire_event"):
             conn.execute(f"DELETE FROM {table}")
         conn.commit()
     finally:
