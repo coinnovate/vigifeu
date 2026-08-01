@@ -382,6 +382,11 @@ def _enjeu_item(category: str, n: int) -> str:
     return f"{n} {sing if n == 1 else plur}"
 
 
+def libelle_categorie_poi(category: str) -> str:
+    """Libellé singulier d'une catégorie POI (infobulle de carte). Jamais de nom propre."""
+    return _ENJEU_LABELS.get(category, (category, category))[0]
+
+
 def phrase_enjeux_poi(tier: str, counts: dict) -> str:
     """Énoncé AGRÉGÉ des enjeux d'un palier (Spec 06 §4). Jamais de nom ni de capacité.
 

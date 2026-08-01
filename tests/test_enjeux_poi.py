@@ -11,8 +11,9 @@ import pytest
 
 from vigifeu.generate.commune import _recensement_poi
 from vigifeu.generate.feu import _enjeux_poi
+from vigifeu.generate.geojson import feu_geojson
 from vigifeu.lexique import fr
-from vigifeu.model.db import connect, migrate
+from vigifeu.model.db import connect, load_config, migrate
 
 
 @pytest.fixture()
@@ -113,3 +114,25 @@ def test_recensement_loader(conn):
     )
     assert hors  # le POI non rattaché n'apparaît pas
     assert _recensement_poi(conn, "00000") == ""   # commune sans POI recensé
+
+
+# --- marqueurs POI sur la carte du feu (feu.geojson) ---
+
+def test_feu_geojson_poi_features(conn):
+    c1 = _poi(conn, "camping", "n/1")
+    h1 = _poi(conn, "hopital", "n/2")
+    loin = _poi(conn, "ecole", "n/3")
+    _rel(conn, c1, "emprise")
+    _rel(conn, h1, "a_moins_de_5km")
+    _rel(conn, loin, "a_moins_de_10km")   # 10 km → PAS sur la carte (Spec 06 §4)
+    conn.commit()
+
+    gj = feu_geojson(conn, load_config(), 1)
+    pois = [f for f in gj["features"] if f["properties"]["couche"] == "poi"]
+    assert len(pois) == 2
+    by_cat = {f["properties"]["category"]: f["properties"] for f in pois}
+    assert by_cat["camping"]["tier"] == "emprise"
+    assert by_cat["hopital"]["tier"] == "proche"
+    assert by_cat["camping"]["libelle"] == "camping"
+    assert "nom" not in by_cat["camping"]                 # jamais de nom propre (P0)
+    assert pois[0]["geometry"]["type"] == "Point"

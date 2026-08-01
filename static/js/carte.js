@@ -10,6 +10,11 @@
 
   // Couleurs du cycle de vie — doublées par l'ordre des couches, pas seulement la teinte.
   var COULEUR = { front_actif: "#c0392b", recent: "#e67e22", plus_detecte: "#8a8a8a" };
+  // POI/enjeux (Spec 06 §4) : teintes MUETTES par catégorie, jamais le rouge/orange du feu.
+  var POI_COULEUR = {
+    camping: "#2e7d5b", ecole: "#3f6fb0", hopital: "#b0555b",
+    ehpad: "#7a5ba8", station_service: "#a8823f", icpe_seveso: "#555555"
+  };
 
   function fond() {
     return {
@@ -63,6 +68,38 @@
         id: "enveloppe", type: "line", source: "feu",
         filter: ["==", ["get", "couche"], "enveloppe"],
         paint: { "line-color": "#333", "line-dasharray": [2, 2], "line-width": 1.5 }
+      });
+      // Enjeux (POI) : marqueurs par catégorie, bord foncé si DANS la zone détectée.
+      // Non cliquables (infobulle seule) — Spec 06 §4.
+      map.addLayer({
+        id: "poi", type: "circle", source: "feu",
+        filter: ["==", ["get", "couche"], "poi"],
+        paint: {
+          "circle-radius": 5,
+          "circle-color": ["match", ["get", "category"],
+            "camping", POI_COULEUR.camping, "ecole", POI_COULEUR.ecole,
+            "hopital", POI_COULEUR.hopital, "ehpad", POI_COULEUR.ehpad,
+            "station_service", POI_COULEUR.station_service,
+            "icpe_seveso", POI_COULEUR.icpe_seveso, "#666666"],
+          "circle-stroke-color": ["case", ["==", ["get", "tier"], "emprise"], "#1a1a1a", "#ffffff"],
+          "circle-stroke-width": ["case", ["==", ["get", "tier"], "emprise"], 2, 1],
+          "circle-opacity": 0.85
+        }
+      });
+      var popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
+      map.on("mouseenter", "poi", function (e) {
+        map.getCanvas().style.cursor = "help";
+        var p = e.features[0].properties;
+        var suffixe = p.tier === "emprise" ? " (dans la zone détectée)" : " (à proximité)";
+        popup.setLngLat(e.lngLat).setText(p.libelle + suffixe).addTo(map);
+      });
+      map.on("mouseleave", "poi", function () {
+        map.getCanvas().style.cursor = ""; popup.remove();
+      });
+      // Toggle de la légende (visible par défaut, masquable) — Spec 06 §4.
+      var toggle = document.getElementById("toggle-poi");
+      if (toggle) toggle.addEventListener("change", function () {
+        map.setLayoutProperty("poi", "visibility", toggle.checked ? "visible" : "none");
       });
       fitTo(map, geojson);
     });

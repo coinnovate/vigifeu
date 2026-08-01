@@ -54,6 +54,9 @@
 <span><i class="pastille recent"></i> Détectée il y a moins de 24 h</span>
 <span><i class="pastille plus_detecte"></i> Plus détectée depuis plus de 24 h</span>
 </div>
+{% if enjeux_poi %}
+<label class="toggle-poi"><input type="checkbox" id="toggle-poi" checked> Afficher les enjeux à proximité (campings, écoles, sites sensibles)</label>
+{% endif %}
 <div class="carte" data-carte="feu" data-geojson="feu.geojson" role="img"
      aria-label="Carte des zones détectées du feu ; description complète dans la synthèse ci-dessus"></div>
 <noscript><p class="indispo">La carte interactive nécessite JavaScript. La synthèse et la chronologie ci-dessus décrivent le feu sans carte.</p></noscript>
