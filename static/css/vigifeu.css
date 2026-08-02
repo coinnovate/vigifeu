@@ -99,6 +99,18 @@ th, td { text-align: left; padding: .35rem .6rem; border-bottom: 1px solid var(-
 /* État « tout va bien » (pas de feu, pas d'alerte) — vert forêt rassurant. */
 .calme { color: var(--vert); background: var(--vert-doux); border-left: 3px solid var(--vert); padding: .5rem .8rem; border-radius: .3rem; }
 
+/* Liste des feux en cours (accueil) — lignes structurées : titre + badges, puis méta
+   (surface estimée · dernière détection). Sobre, pas de dramatisation. */
+.liste-feux { list-style: none; padding: 0; margin: .5rem 0; }
+.feu-item { padding: .55rem 0; border-bottom: 1px solid var(--trait); }
+.feu-item:last-child { border-bottom: 0; }
+.feu-titre { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
+.feu-titre a { font-weight: 600; }
+/* « nouveau » en marine (factuel), jamais en rouge/orange — ce n'est pas une alerte. */
+.tag-nouveau { display: inline-block; padding: .08rem .5rem; border-radius: 1rem; font-size: .72rem;
+  font-weight: 700; text-transform: uppercase; letter-spacing: .02em; background: var(--marine); color: #fff; }
+.feu-meta { color: var(--gris); font-size: .85rem; margin-top: .15rem; }
+
 /* Carte (enrichissement) — hauteur fixe, la légende contractuelle est en HTML */
 .carte { width: 100%; height: 22rem; border: 1px solid var(--trait); border-radius: .3rem; margin: .5rem 0; background: var(--fond-doux); }
 .carte[hidden] { display: none; }

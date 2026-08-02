@@ -89,7 +89,7 @@ def national_geojson(conn: sqlite3.Connection, config: dict) -> dict:
     ).fetchall()
     for r in rows:
         lv = conn.execute(
-            "SELECT geometry_wkt FROM fire_event_version WHERE fire_event_id=? "
+            "SELECT geometry_wkt, area_ha_estimee FROM fire_event_version WHERE fire_event_id=? "
             "ORDER BY version_n DESC LIMIT 1",
             (r["id"],),
         ).fetchone()
@@ -104,6 +104,9 @@ def national_geojson(conn: sqlite3.Connection, config: dict) -> dict:
                 "nom": f"Feu de {lieu}",
                 "lifecycle": r["lifecycle"],
                 "confidence": r["confidence_level"],
+                # Surface ESTIMÉE (ha) → rayon du marqueur (proportionnel, carte.js) ; jamais
+                # affichée comme un fait. NULL possible (feu sans version chiffrée) → rayon plancher.
+                "area_ha": lv["area_ha_estimee"],
                 "url": f"/feux/{r['public_id']}/",
             },
             "geometry": mapping(Point(c.x, c.y)),

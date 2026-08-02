@@ -113,7 +113,20 @@
       map.addLayer({
         id: "feux", type: "circle", source: "feux",
         paint: {
-          "circle-radius": 7, "circle-color": COULEUR.front_actif,
+          // Rayon proportionnel à la surface ESTIMÉE : on interpole sur √surface pour que
+          // l'AIRE du cercle (perçue) soit proportionnelle à la surface du feu (symbole
+          // proportionnel honnête). area_ha NULL → plancher (petit cercle), jamais 0/invisible.
+          "circle-radius": [
+            "interpolate", ["linear"],
+            ["sqrt", ["max", 1, ["coalesce", ["get", "area_ha"], 1]]],
+            1, 4,    // ~1 ha
+            4, 6,    // ~16 ha
+            10, 9,   // ~100 ha
+            22, 13,  // ~500 ha
+            32, 16,  // ~1000 ha
+            71, 22   // ~5000 ha (mégafeu)
+          ],
+          "circle-color": COULEUR.front_actif,
           "circle-stroke-color": "#fff", "circle-stroke-width": 1.5, "circle-opacity": 0.9
         }
       });

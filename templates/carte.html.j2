@@ -18,9 +18,22 @@
 <section class="feux-en-cours">
 <h2>Feux suivis en cours</h2>
 {% if feux %}
-<ul>
+<ul class="liste-feux">
 {% for f in feux %}
-<li><a href="{{ f.url }}">{{ f.nom }}</a> <span class="badge {{ f.classe }}">{{ f.badge }}</span></li>
+<li class="feu-item">
+  <div class="feu-titre">
+    <a href="{{ f.url }}">{{ f.nom }}</a>
+    {% if f.nouveau %}<span class="tag-nouveau">{{ f.nouveau }}</span>{% endif %}
+    <span class="badge {{ f.classe }}">{{ f.badge }}</span>
+  </div>
+  {% if f.surface or f.detecte_le %}
+  <div class="feu-meta">
+    {%- if f.surface %}<span class="feu-surface">{{ f.surface }}</span>{% endif -%}
+    {%- if f.surface and f.detecte_le %} · {% endif -%}
+    {%- if f.detecte_le %}<span class="feu-date">dernière détection {{ f.detecte_le }}</span>{% endif -%}
+  </div>
+  {% endif %}
+</li>
 {% endfor %}
 </ul>
 {% else %}

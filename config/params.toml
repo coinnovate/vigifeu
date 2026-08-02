@@ -184,6 +184,15 @@ templates_dir = "templates"            # gabarits Jinja2 (repo)
 static_dir = "static"                  # css, js minimal, pmtiles (copiés tels quels)
 base_url = "https://sentifeu.fr"       # origine publique pour canonical/sitemaps
 referentiel_millesime = "2026"         # millésime Admin Express affiché en attribution (Spec 03 §2.7)
+# Fond de carte MapTiler (raster) — lu par write_carte_config → window.SENTIFEU_MAPTILER_MAP.
+# « outdoor-v2 » : forêts en vert explicite + relief (on doit VOIR la végétation sur un site de
+# feux de forêt) ; fond assez clair pour que les cellules du feu et les POI restent lisibles
+# par-dessus (le « dataviz » gris d'avant était trop effacé). Sert la carte nationale ET les fiches.
+maptiler_map = "outdoor-v2"
+# Étiquette « nouveau » sur la liste d'accueil : feu dont la PREMIÈRE détection remonte à moins
+# de ce nombre d'heures, mesuré depuis la dernière observation en base (pas l'heure de génération,
+# P0 : pas d'horodatage de build). Factuel, pas une alerte.
+nouveau_max_h = 24
 # Indexation par vagues (Spec 04 §5) : une commune a une page (et entre au sitemap) si elle
 # est concernée par un feu OU a >= ce nombre de feux BDIFF recensés. Abaisser pour élargir
 # la vague (puis `vigifeu rebuild`), quand Search Console montre une indexation saine.
@@ -204,7 +213,7 @@ frp_seuils = [50, 500]            # MW : modéré <50 ≤ soutenu <500 ≤ inten
 # France auto-hébergé avant le lancement public (Lot 5). La clé est un secret d'env
 # (VIGIFEU_MAPTILER_KEY), jamais dans ce fichier.
 carte_style = "maptiler-raster"
-maptiler_map = "dataviz"                # fond sobre (clair) — ne concurrence pas les cellules du feu
+# (le fond MapTiler est réglé par [generate].maptiler_map — seul lu par le générateur.)
 
 [analytics]
 # Mesure d'audience sans cookie (RGPD, cadrage §15) — Umami auto-hébergé. Le website-id

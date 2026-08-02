@@ -182,6 +182,18 @@ def badge_cycle_de_vie(lifecycle: str) -> str:
     return _BADGE[lifecycle]
 
 
+def libelle_nouveau() -> str:
+    """Étiquette « nouveau » (liste d'accueil) — feu détecté depuis moins de 24 h. Factuel,
+    pas une alerte (le seuil est en config generate.nouveau_max_h)."""
+    return "nouveau"
+
+
+def surface_estimee_courte(ha: float) -> str:
+    """Surface d'emprise, forme COURTE pour la liste d'accueil — catégorie `estimee`, jamais
+    présentée comme un fait (« estimé »). La forme longue est phrase_emprise_estimee."""
+    return f"≈ {nombre_fr(ha)} ha (estimé)"
+
+
 def libelle_cycle_de_vie(
     lifecycle: str,
     *,
