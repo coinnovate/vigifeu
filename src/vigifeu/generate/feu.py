@@ -8,7 +8,6 @@ La page est une fonction pure de la base (Spec 04 P1) → golden file possible (
 
 from __future__ import annotations
 
-import os
 import sqlite3
 from datetime import datetime, timedelta
 
@@ -321,11 +320,12 @@ def _chronologie(conn, config, event_id):
 
 
 def _imagerie_ctx(config: dict, fire) -> dict:
-    """Champs imagerie Sentinel-2 (Spec 06 §5, cran 2) — présents seulement si une instance
-    Sentinel Hub est configurée (env VIGIFEU_SENTINELHUB_INSTANCE) ET le feu a une date. Fenêtre
-    temporelle = première détection → dernière + marge (capter la cicatrice post-feu) ; le WMS
-    renvoie la vue mostRecent peu nuageuse. Sinon tout None → aucune UI d'imagerie (dégradé)."""
-    if not (os.environ.get("VIGIFEU_SENTINELHUB_INSTANCE") and fire["last_acq_at"]):
+    """Champs imagerie Sentinel-2 (Spec 06 §5, cran 2) — la FENÊTRE temporelle est calculée dès
+    qu'un feu a une date. La disponibilité RÉELLE (instance Sentinel Hub configurée) est décidée
+    CÔTÉ CLIENT (carte.js lit carte-config.js et masque le toggle sans instance) : ainsi un
+    `rebuild` manuel n'a pas besoin de l'env (seul le daemon lit /opt/vigifeu/.env pour écrire
+    carte-config.js). Fenêtre = première détection − before → dernière + after ; WMS = mostRecent."""
+    if not fire["last_acq_at"]:
         return {"imagerie_from": None, "imagerie_to": None,
                 "imagerie_toggle": None, "imagerie_legende": None}
     img = config.get("imagerie", {})

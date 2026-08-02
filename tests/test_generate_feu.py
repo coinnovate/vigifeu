@@ -302,27 +302,20 @@ def test_carte_config_isole_la_cle(db, tmp_path, monkeypatch):
     assert '""' in contenu2
 
 
-def test_imagerie_sentinel2_gated_sur_instance(saumos_archive, monkeypatch):
-    """Imagerie Sentinel-2 (Spec 06 §5, cran 2) : présente SEULEMENT si une instance Sentinel Hub
-    est configurée (env). Sans env → aucune UI (pas de toggle mort) ; avec env → fenêtre datée
-    (première détection → dernière + marge) + toggle + réserve P0."""
+def test_imagerie_sentinel2_fenetre(saumos_archive):
+    """Imagerie Sentinel-2 (Spec 06 §5, cran 2) : la FENÊTRE temporelle est calculée dès qu'un feu
+    a une date (la disponibilité RÉELLE = décidée côté client via carte-config.js, pas gated sur
+    l'env au rendu — un rebuild manuel n'a pas l'env). Fenêtre élargie AVANT la première détection
+    (07-22) pour assez de passages S2 clairs, finit APRÈS la dernière (07-27) + marge."""
     conn, config, saumos_id = saumos_archive
     env = make_env(config["generate"]["templates_dir"])
-    monkeypatch.delenv("VIGIFEU_SENTINELHUB_INSTANCE", raising=False)
     ctx = load_fire_context(conn, config, saumos_id)
-    assert ctx["imagerie_from"] is None
-    assert "toggle-imagerie" not in render_feu(env, ctx)
-
-    monkeypatch.setenv("VIGIFEU_SENTINELHUB_INSTANCE", "test-instance-id")
-    ctx2 = load_fire_context(conn, config, saumos_id)
-    # Fenêtre élargie : commence AVANT la première détection (07-22) pour assez de passages S2
-    # clairs, finit APRÈS la dernière (07-27) + marge. mostRecent privilégie quand même le récent.
-    assert ctx2["imagerie_from"] < "2026-07-22"
-    assert ctx2["imagerie_to"] > "2026-07-27"
-    page = render_feu(env, ctx2)
-    assert f'data-img-from="{ctx2["imagerie_from"]}"' in page and "data-img-to=" in page
-    assert "Sentinel-2" in page                            # toggle + légende
-    assert "l'étendue a pu évoluer" in page                # réserve P0 (honnêteté « pas un état courant »)
+    assert ctx["imagerie_from"] < "2026-07-22"
+    assert ctx["imagerie_to"] > "2026-07-27"
+    page = render_feu(env, ctx)
+    assert f'data-img-from="{ctx["imagerie_from"]}"' in page and "data-img-to=" in page
+    assert "toggle-imagerie" in page and "Sentinel-2" in page   # toggle + légende toujours rendus
+    assert "l'étendue a pu évoluer" in page                     # réserve P0 (« pas un état courant »)
 
 
 def test_carte_config_emet_instance_sentinelhub(db, tmp_path, monkeypatch):
