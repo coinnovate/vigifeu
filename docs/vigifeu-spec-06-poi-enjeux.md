@@ -1,6 +1,7 @@
 # Vigifeu — Spécification 06 : POI / enjeux & imagerie d'étendue
 
-**Version :** 0.1
+**Version :** 0.2 (2026-08 — mise à jour avec les réalités d'implémentation : formats réels des sources §2.2,
+mécanisme de dédup §2.3, imagerie passée de GIBS à Sentinel-2 §5, statut des étapes §6-§7)
 **Références :** Spec 05 (§0 principe de responsabilité P0, §1 principes, §3-§3bis cadrage), Spec 01
 (§1 principes, modèle `commune`), Spec 03 (§1, §3.3 fiche feu), Spec 04 (générateur), cadrage v0.4
 (§5.5, §6bis, §15bis), Lot 3 (référentiels + `engine/relations.py`)
@@ -66,7 +67,8 @@ Catégories v1 (Spec 05 §4, §7) : campings, écoles, hôpitaux/EHPAD, stations
 
 1. **OpenStreetMap** — en premier (largeur + rapidité).
    - **Overpass API** (`https://overpass-api.de/api/interpreter`) — requête ciblée, sort du **GeoJSON**
-     direct, léger (voie de démarrage, comme la fixture Lot 3). Tags v1 : campings `tourism=camping` ;
+     direct, léger (voie de démarrage, comme la fixture Lot 3). Tags v1 : campings `tourism=camp_site`
+     (⚠️ **PAS** `tourism=camping`, inexistant dans OSM — bug attrapé sur données réelles, cf. §8bis) ;
      écoles `amenity=school` ; hôpitaux/cliniques `amenity=hospital` ; EHPAD `amenity=social_facility`
      + `social_facility=nursing_home` ; stations-service `amenity=fuel`.
    - **Geofabrik** (`download.geofabrik.de/europe/france.html`) — `france-latest.osm.pbf` (~4 Go) ou
@@ -84,12 +86,44 @@ Catégories v1 (Spec 05 §4, §7) : campings, écoles, hôpitaux/EHPAD, stations
 **Démarrage (étape 2 du dev, §6) :** OSM via **Overpass sur la bbox Gironde-ouest** (celle du Lot 3) →
 petite fixture GeoJSON, comme pour les communes. BD TOPO + Géorisques en sources 2-3.
 
+**Réalités vérifiées à l'implémentation (2026-08, sur données réelles — les formats supposés ci-dessus
+étaient partiellement faux, corrigés en isolant le mapping en config) :**
+
+- **OSM** — chargé France entière (~164 k POI) via Overpass **par catégorie** (5 requêtes simples > 1
+  grosse ; miroirs multiples car `overpass-api.de`/`kumi` renvoient souvent des 504 ; ⚠️ `overpass.osm.ch`
+  = instance **régionale suisse**, ne couvre pas la France, à proscrire). L'importeur `.pbf` pyosmium
+  reste **non fait** ; une requête France en un coup est fragile → par régions/catégories.
+- **BD TOPO** — BD TOPO **V3 n'a PAS** de couches séparées `etablissement_de_sante`/`enseignement` : tout
+  vit dans **une seule couche `zone_d_activite_ou_d_interet`** (les PAI), catégorisée par l'attribut
+  **`nature`**. Voie retenue = **WFS Géoplateforme** (`data.geopf.fr/wfs/ows`, `TYPENAMES=
+  BDTOPO_V3:zone_d_activite_ou_d_interet`, GeoJSON, CQL_FILTER par `nature`, paginé) plutôt que le GPKG
+  complet (qui balaie tout le bâti). Valeurs `nature` réelles : `Camping` ; `Hôpital`/`Etablissement
+  hospitalier` ; `Maison de retraite` ; `Enseignement primaire`/`Collège`/`Lycée`/`Autre établissement
+  d'enseignement`. **`station_service` ABSENT de BD TOPO** → reste couvert par OSM seul. ~70 k POI France.
+- **Géorisques** — la source réelle est une **API JSON** (`georisques.gouv.fr/api/v1/installations_classees`),
+  **PAS un CSV** ; champs camelCase (`statutSeveso`, `codeAIOT`, `raisonSociale`, `longitude`/`latitude`).
+  Filtre serveur `statutSeveso` indevinable → tirer toute la base (paginée) + filtrer client sur le libellé
+  `Seveso seuil haut`/`Seveso seuil bas`. **1 351 sites Seveso** (= décompte officiel FR, champ fiable).
+
 ### 2.3 Fraîcheur et déduplication (P5 — responsabilité)
 
 - provenance + `imported_at` par POI ;
-- **cadence de ré-import** définie par source (OSM plus volatil que BD TOPO) ;
+- **cadence de ré-import** définie par source (OSM plus volatil que BD TOPO) — **non faite (étape 10)** ;
 - **déduplication inter-sources** : un même camping présent dans OSM **et** BD TOPO ne doit compter qu'une
   fois (rapprochement spatial + catégorie).
+
+**Dédup — mécanisme implémenté (migration 005, `engine/relations.recompute_poi_dedup`) :** on **marque, on
+ne supprime jamais** (P1). Colonne `poi.superseded_by` → un doublon pointe vers son POI **canonique** ; les
+lectures d'enjeux (`build_poi_index` feu↔POI, `recompute_commune_poi`) filtrent `superseded_by IS NULL`.
+Passe **recompute déterministe et idempotente** (comme `recompute_commune_poi`), lancée après chaque import :
+par catégorie, en **ordre de priorité de source** (`[poi].source_priority = [bdtopo, georisques, osm]` —
+l'officiel/frais prime), on absorbe les voisins d'une **autre** source dans le rayon (jamais même source :
+deux POI d'une même source proches = enjeux distincts). **Rayon PAR CATÉGORIE** (`[poi].dedup_radius_m =
+{ default = 150, camping = 250 }`) — calé sur données réelles : les campings (grande emprise → centroïde de
+zone BD TOPO vs point OSM éloignés, ex. « la Grigne » à 210 m) exigent un rayon plus large, les
+écoles/hôpitaux ponctuels (twins à ~8 m) non. ⚠️ **dédup par distance seule = approximation** (résolution
+d'entités) ; un appariement par **similarité de nom** l'affinerait (amélioration ouverte). Résultat national
+mesuré : ~65 k doublons OSM masqués au profit de BD TOPO ; Géorisques seul sur `icpe_seveso` (0 doublon).
 
 ---
 
@@ -178,8 +212,9 @@ MTG. Données **libres et gratuites** (aucune licence commerciale).
 | **NASA GIBS / Worldview** | vraie-couleur quotidienne (MODIS/VIIRS), tuiles WMTS datées | gratuit | **léger** (calque de tuiles dans MapLibre) |
 | **Copernicus Sentinel-2** (Copernicus Data Space Ecosystem, `dataspace.copernicus.eu`) | 10 m, SWIR / NBR | **gratuit** (APIs OData/STAC) | **moyen** (télécharger + composer la fausse-couleur) |
 
-Note : **Sentinel Hub** est un service de commodité commercial (quota gratuit puis payant), **non requis** —
-le CDSE donne accès aux scènes gratuitement. L'effort Sentinel-2 est du **dev + compute/stockage**, pas un coût.
+Note : **Sentinel Hub** est aussi accessible **gratuitement via le CDSE** (compte requis) et sert des tuiles
+Sentinel-2 datées **à la volée** — ce qui évite le « télécharger + composer + héberger » et s'est révélé le
+chemin le plus court (cf. réalité d'implémentation ci-dessous).
 
 **Discipline P0 (honnêteté « veille pas alerte ») :**
 - une image est une **observation datée** (Spec 01 P3), catégorie `mesuree` ; **date d'acquisition + source**
@@ -191,16 +226,40 @@ le CDSE donne accès aux scènes gratuitement. L'effort Sentinel-2 est du **dev 
 **Technique :** réutilise la stack carte (MapLibre + tuiles) ; imagerie déjà géoréférencée, overlay naturel
 avec l'emprise.
 
-**Deux crans :**
+**Deux crans (plan initial) :**
 1. **Cran léger** : calque **GIBS** activable sur la carte de fiche, daté au jour du feu. Intégration minime.
-2. **Cran riche** (`OUVERT`, v2) : **instantané cicatrice Sentinel-2** (SWIR) pour les feux **significatifs /
-   archivés**. À évaluer : traitement de scène, compute, stockage.
+2. **Cran riche** (v2) : **cicatrice Sentinel-2** (SWIR) pour les feux **significatifs / archivés**.
+
+**Réalité d'implémentation (2026-08) — on est passé directement au cran 2 :**
+- Le **cran léger GIBS a été implémenté puis abandonné** : la vraie-couleur quotidienne est à **250 m/pixel**,
+  bien trop grossière à l'échelle d'un feu (zoom ~11 : c'est flou, on ne distingue rien). Bon pour le contexte
+  régional/panache d'un grand feu dézoomé, pas pour regarder un feu — jugé décevant.
+- **Livré = cran 2 : Sentinel-2 10 m fausse-couleur SWIR** (`B12/B8A/B04`, gain 2.5), 25× plus fin — la
+  cicatrice ressort en gris-brun dans l'emprise sur le vert de la forêt. **Via CDSE Sentinel Hub WMS**
+  (`sh.dataspace.copernicus.eu/ogc/wms/{instance}`), calque raster MapLibre **sous les cellules**, opt-in.
+- **Architecture (vérifiée sur vraie tuile) :** l'**ID d'instance** de configuration Sentinel Hub **suffit à
+  authentifier** le `GetMap` (le WMS ne gère pas de jeton) → **aucun OAuth par requête, aucun proxy serveur**.
+  L'ID est **semi-public** (comme la clé MapTiler) : variable d'env `VIGIFEU_SENTINELHUB_INSTANCE`, jamais dans
+  le dépôt, écrite dans `carte-config.js`. ⚠️ Sentinel Hub OGC n'a **pas de whitelist de domaine** ; protection
+  = quota/rate-limit CDSE ; filet si abus = passer à un **proxy serveur** (jeton OAuth, instance privée) ou un
+  pré-rendu/cache. Sans instance configurée → **pas d'imagerie** (dégradé, toggle masqué).
+- **Fenêtre temporelle** WMS = `[first_acq − 40 j, last_acq + 10 j]`, le WMS renvoyant la vue **mostRecent peu
+  nuageuse** (maxCC 20). ⚠️ une fenêtre trop courte laisse des **trous no-data noirs** sur la terre (Sentinel-2
+  passe par bandes tous les ~5 j, les nuages en éliminent) → ~40 j avant garantit la couverture ; mostRecent
+  privilégie quand même le récent (post-feu). L'**eau est légitimement noire** en SWIR (pas un bug).
+- **Légende P0** effective : « Image {source} — vue la plus récente peu nuageuse **depuis le début du feu**
+  ({date}) : l'étendue a pu évoluer depuis » (la date exacte n'est pas déterministe avec mostRecent).
 
 ---
 
 ## 6. Étapes de développement (petits pas, tests au fil, commits FR)
 
-1. **Migration** — table `poi` (§2.1) + `fe_poi_rel` (§3.1) + `commune_poi` (§3.2). Une migration.
+**Statut (2026-08) : étapes 1-9 FAITES et en production** (référentiel 3 sources OSM+BD TOPO+Géorisques avec
+dédup inter-sources ; enjeux fiche feu + recensement commune + marqueurs + légende ; imagerie Sentinel-2).
+**Reste l'étape 10 (fraîcheur).** Deux sous-étapes ajoutées en cours de route : **8bis** = correction des
+formats réels des sources (§2.2) ; **9 refaite en cran 2** (§5).
+
+1. **Migration** — table `poi` (§2.1) + `fe_poi_rel` (§3.1) + `commune_poi` (§3.2). *(migration 004 ; + 005 pour la dédup)*
 2. **Importeur OSM** — `referentiels/poi_osm.py` : extrait Geofabrik filtré ou Overpass OSM, upsert
    idempotent par (`source`, `source_ref`). Fixture sur la bbox Gironde-ouest (Lot 3, déjà là).
 3. **Relation feu↔POI** — extension de `engine/relations.py` + `fe_poi_rel` historisée, câblée dans
@@ -210,10 +269,13 @@ avec l'emprise.
    distincte « dans la zone détectée » vs « à proximité ». **Public prudent seulement.** Golden régénéré.
 6. **Recensement communal sur la fiche commune** — phrase agrégée `commune_poi` (§4).
 7. **POI majeurs sur la carte du feu** (Spec 03 §3.3) — marqueurs agrégés par catégorie ; POI dans
-   l'emprise rendu à l'intérieur du polygone.
-8. **2ᵉ et 3ᵉ sources** — importeur BD TOPO (dédup vs OSM), puis Géorisques/ICPE-Seveso.
-9. **Imagerie — cran léger** : calque GIBS daté sur la carte de fiche (§5).
-10. **Fraîcheur** — cadence de ré-import + provenance datée (§2.3).
+   l'emprise rendu à l'intérieur du polygone. *(+ légende couleur→catégorie ajoutée après retour user)*
+8. **2ᵉ et 3ᵉ sources** — importeur BD TOPO (dédup vs OSM), puis Géorisques/ICPE-Seveso. **Dédup =
+   `superseded_by` + rayon par catégorie (§2.3).** ⚠️ formats réels ≠ supposés (§2.2, « 8bis »).
+9. **Imagerie** — ~~cran léger GIBS~~ → **cran 2 Sentinel-2 10 m SWIR via CDSE Sentinel Hub** (§5 :
+   GIBS 250 m trop flou, remplacé).
+10. **Fraîcheur** — cadence de ré-import + provenance datée + **suppression des POI disparus des sources**
+    (l'import est upsert-only, il n'enlève rien → risque de POI périmés, P5). **RESTE À FAIRE.**
 
 **Jalon J-POI :** un feu réel affiche un enjeu public agrégé correct (rejeu Saumos : « dans la zone
 détectée : … » + « à proximité : … »), une fiche commune affiche son recensement d'enjeux, relations
@@ -230,8 +292,14 @@ détectée : … » + « à proximité : … »), une fiche commune affiche son 
   (recensement agrégé permanent). Public agrégé, jamais nominatif ni impact affirmé (§4).
 - **Hors v1** : enjeux linéaires (axes routiers) et surfaciques (zones urbanisées) — data d'une autre forme.
 
-**`OUVERT` :**
-- rayon(s) affichés au public (5 km ? plusieurs paliers ?) et seuil « POI majeur » sur la carte ;
+**Résolu depuis (2026-08) :**
+- **rayon carte** : tranché → marqueurs `emprise` + `< 5 km` seulement ; paliers 10/20 km en texte (§4).
+- **dédup** : `superseded_by` + rayon par catégorie `{default 150, camping 250}` (§2.3).
+- **cran 2 imagerie** : FAIT → Sentinel-2 SWIR via CDSE Sentinel Hub WMS, **sans** téléchargement/stockage de
+  scènes (tuiles à la volée, auth par ID d'instance) — bien plus léger que « traitement de scène » prévu (§5).
+
+**`OUVERT` (reste) :**
 - résolution `{X} m` à citer dans la réserve d'emprise (§4) ;
-- cadence de ré-import par source (§2.3) ;
-- cran 2 imagerie Sentinel-2 (traitement de scène, stockage).
+- **cadence de ré-import + suppression des POI disparus** par source (§2.3, étape 10) ;
+- **dédup par similarité de nom** (affiner la dédup distance-seule, §2.3) ;
+- couverture BD TOPO/OSM France : importeur `.pbf` pyosmium non fait (aujourd'hui Overpass par régions).
