@@ -7,6 +7,7 @@
   "use strict";
   var KEY = window.SENTIFEU_MAPTILER_KEY || "";
   var MAP = window.SENTIFEU_MAPTILER_MAP || "dataviz";
+  var GIBS = window.SENTIFEU_GIBS || {};   // imagerie satellite datée (Spec 06 §5)
 
   // Couleurs du cycle de vie — doublées par l'ordre des couches, pas seulement la teinte.
   var COULEUR = { front_actif: "#c0392b", recent: "#e67e22", plus_detecte: "#8a8a8a" };
@@ -86,6 +87,26 @@
           "circle-opacity": 0.85
         }
       });
+      // Imagerie satellite datée (Spec 06 §5) : calque GIBS SOUS les cellules (le feu reste
+      // au-dessus), opt-in via le toggle. La date vient du feu (data-img-date). Sans config
+      // GIBS ou sans date, on ne l'ajoute pas (dégradé silencieux).
+      var imgDate = el.getAttribute("data-img-date");
+      if (imgDate && GIBS.url && GIBS.layer) {
+        map.addSource("imagerie", {
+          type: "raster", tileSize: 256, maxzoom: GIBS.maxzoom || 9,
+          tiles: [GIBS.url + "/" + GIBS.layer + "/default/" + imgDate + "/" +
+                  GIBS.matrixset + "/{z}/{y}/{x}." + (GIBS.ext || "jpg")],
+          attribution: GIBS.source || "NASA GIBS"
+        });
+        map.addLayer({ id: "imagerie", type: "raster", source: "imagerie",
+                       layout: { visibility: "none" } }, "cellules");   // sous les cellules
+        var tImg = document.getElementById("toggle-imagerie");
+        var note = document.getElementById("imagerie-note");
+        if (tImg) tImg.addEventListener("change", function () {
+          map.setLayoutProperty("imagerie", "visibility", tImg.checked ? "visible" : "none");
+          if (note) note.hidden = !tImg.checked;   // la réserve P0 n'apparaît qu'avec l'image
+        });
+      }
       var popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
       map.on("mouseenter", "poi", function (e) {
         map.getCanvas().style.cursor = "help";

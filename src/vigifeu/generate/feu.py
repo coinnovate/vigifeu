@@ -386,6 +386,16 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
         "last_acq": fr.horodatage(fire["last_acq_at"]) if fire["last_acq_at"] else None,
         "bandeau_archive": (fr.bandeau_archive(fire["last_acq_at"])
                             if fire["lifecycle"] == "archive" and fire["last_acq_at"] else None),
+        # Imagerie GIBS (Spec 06 §5, cran léger) : calque satellite daté au jour du feu.
+        # Discipline P0 : date d'acquisition = celle de la donnée (dernière détection), légende
+        # « l'étendue a pu évoluer ». La tuile datée est construite côté carte.js (data-img-date).
+        "imagerie_date": fire["last_acq_at"][:10] if fire["last_acq_at"] else None,
+        "imagerie_toggle": (fr.toggle_imagerie(fr.date_fr(fire["last_acq_at"]))
+                            if fire["last_acq_at"] else None),
+        "imagerie_legende": (
+            fr.legende_imagerie(fr.date_fr(fire["last_acq_at"]),
+                                config.get("imagerie", {}).get("gibs_source", ""))
+            if fire["last_acq_at"] else None),
         "synthese": synthese,
         "communes_groupes": _groupes_communes(relations, _REL_PRINCIPAUX),
         "communes_groupes_eloignes": _groupes_communes(relations, _REL_ELOIGNES),

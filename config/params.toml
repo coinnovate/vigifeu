@@ -206,6 +206,18 @@ wave_min_history_fires = 3
 # tardif fausserait la médiane (la latence NRT ne se rejoue pas, P5).
 latence_nrt_max_h = 6
 
+[imagerie]
+# Spec 06 §5 — cran léger : calque de tuiles NASA GIBS (vraie-couleur quotidienne, gratuit,
+# géoréférencé) daté au jour du feu, activable sur la carte de fiche. Discipline P0 : une image
+# est une OBSERVATION DATÉE, jamais un état courant (légende « l'étendue a pu évoluer depuis »).
+# Lu par write_carte_config → window.SENTIFEU_GIBS. Le cran riche (cicatrice Sentinel-2 SWIR) = v2.
+gibs_url = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best"
+gibs_layer = "VIIRS_SNPP_CorrectedReflectance_TrueColor"   # vraie couleur 250 m (panache de fumée)
+gibs_matrixset = "GoogleMapsCompatible_Level9"
+gibs_ext = "jpg"
+gibs_maxzoom = 9
+gibs_source = "NASA GIBS — VIIRS/SNPP, vraie couleur"       # attribution + légende
+
 [indicateurs]
 # Seuils de sévérité du bandeau d'indicateurs de la fiche feu (couleur = état, factuel).
 # Croissants : faible < s0 ≤ modéré < s1 ≤ élevé < s2 ≤ très élevé.

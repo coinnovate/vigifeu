@@ -65,8 +65,14 @@
 </div>
 {% endif %}
 {% endif %}
-<div class="carte" data-carte="feu" data-geojson="feu.geojson" role="img"
+{% if imagerie_date %}
+{# Imagerie satellite datée (Spec 06 §5, cran léger) — opt-in : calque de tuiles NASA GIBS
+   sous les cellules du feu. Discipline P0 : légende « image à cette date, a pu évoluer ». #}
+<label class="toggle-imagerie"><input type="checkbox" id="toggle-imagerie"> {{ imagerie_toggle }}</label>
+{% endif %}
+<div class="carte" data-carte="feu" data-geojson="feu.geojson"{% if imagerie_date %} data-img-date="{{ imagerie_date }}"{% endif %} role="img"
      aria-label="Carte des zones détectées du feu ; description complète dans la synthèse ci-dessus"></div>
+{% if imagerie_date %}<p class="note imagerie-note" hidden id="imagerie-note">{{ imagerie_legende }}</p>{% endif %}
 <noscript><p class="indispo">La carte interactive nécessite JavaScript. La synthèse et la chronologie ci-dessus décrivent le feu sans carte.</p></noscript>
 </section>
 

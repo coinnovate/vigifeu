@@ -194,6 +194,18 @@ def surface_estimee_courte(ha: float) -> str:
     return f"≈ {nombre_fr(ha)} ha (estimé)"
 
 
+def toggle_imagerie(date_affichee: str) -> str:
+    """Libellé du toggle d'imagerie satellite (carte de fiche, Spec 06 §5)."""
+    return f"Afficher l'imagerie satellite du {date_affichee}"
+
+
+def legende_imagerie(date_affichee: str, source: str) -> str:
+    """Légende P0 obligatoire de l'imagerie (Spec 06 §5) : image = OBSERVATION DATÉE, jamais un
+    état courant. Rappelle la date d'acquisition, la source, et que l'étendue a pu évoluer."""
+    return (f"Image du {date_affichee} ({source}) — vue satellite à cette date : "
+            "l'étendue a pu évoluer depuis.")
+
+
 def libelle_cycle_de_vie(
     lifecycle: str,
     *,
