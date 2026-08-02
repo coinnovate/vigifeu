@@ -243,12 +243,21 @@ avec l'emprise.
   le dépôt, écrite dans `carte-config.js`. ⚠️ Sentinel Hub OGC n'a **pas de whitelist de domaine** ; protection
   = quota/rate-limit CDSE ; filet si abus = passer à un **proxy serveur** (jeton OAuth, instance privée) ou un
   pré-rendu/cache. Sans instance configurée → **pas d'imagerie** (dégradé, toggle masqué).
-- **Fenêtre temporelle** WMS = `[first_acq − 40 j, last_acq + 10 j]`, le WMS renvoyant la vue **mostRecent peu
-  nuageuse** (maxCC 20). ⚠️ une fenêtre trop courte laisse des **trous no-data noirs** sur la terre (Sentinel-2
-  passe par bandes tous les ~5 j, les nuages en éliminent) → ~40 j avant garantit la couverture ; mostRecent
-  privilégie quand même le récent (post-feu). L'**eau est légitimement noire** en SWIR (pas un bug).
-- **Légende P0** effective : « Image {source} — vue la plus récente peu nuageuse **depuis le début du feu**
-  ({date}) : l'étendue a pu évoluer depuis » (la date exacte n'est pas déterministe avec mostRecent).
+- **POLITIQUE d'affichage (décision 2026-08, P0) : POST-FEU CLAIR SEULEMENT, avec la VRAIE date.**
+  Enseignement clé sur données réelles : pour un feu **actif**, il n'y a **souvent pas encore** de vue Sentinel-2
+  claire post-feu (nuages + repassage ~5 j). Ex. Saumos (feu du 22/07) : seule vue claire (<20 % nuages) = le
+  **21/07, la veille du feu** ; passages post-feu (26/07 à 31 %, 31/07 à 86 %) trop nuageux. Une approche
+  « mostRecent sur une fenêtre large » affichait donc une image **antérieure au feu** (forêt intacte), mislabellée.
+- **Résolution de la vraie date via le WFS** (`.../ogc/wfs/{instance}`, `TYPENAMES=DSS2`, **même auth par ID
+  d'instance, CORS OK** — vérifié) : au 1ᵉʳ clic du toggle, `carte.js` liste les passages S2 `[first_acq,
+  last_acq + 30 j]` avec `cloudCoverPercentage`, retient le **plus récent < seuil** (`max_cloud_pct`, 20 %),
+  **épingle le WMS à CETTE date exacte** et affiche la vraie date. **Aucun passage clair → dégradé honnête**
+  (« pas encore de vue satellite claire depuis le début du feu »), jamais d'image pré-feu trompeuse.
+- **Conséquence assumée** : imagerie **souvent absente sur les feux actifs**, **nette + datée sur les archivés**
+  — parfaitement cohérent « veille pas alerte ». L'**eau est noire** en SWIR (pas un bug). Sans instance
+  configurée → toggle masqué (dégradé, décidé côté client via `carte-config.js`).
+- **Légende P0** effective : « Image satellite du {vraie_date} ({source}) — vue peu nuageuse à cette date :
+  l'étendue a pu évoluer depuis » (la date est la VRAIE date d'acquisition, résolue par le WFS).
 
 ---
 
