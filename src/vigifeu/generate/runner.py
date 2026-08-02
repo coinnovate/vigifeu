@@ -132,6 +132,8 @@ def write_carte_config(config: dict) -> Path:
     img = config.get("imagerie", {})
     sh = {
         "wms": img.get("sentinelhub_wms", ""),
+        "wfs": img.get("sentinelhub_wfs", ""),
+        "typename": img.get("sentinelhub_typename", "DSS2"),
         "layer": img.get("sentinelhub_layer", ""),
         "instance": os.environ.get("VIGIFEU_SENTINELHUB_INSTANCE", ""),
         "source": img.get("sentinelhub_source", ""),

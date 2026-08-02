@@ -303,19 +303,23 @@ def test_carte_config_isole_la_cle(db, tmp_path, monkeypatch):
 
 
 def test_imagerie_sentinel2_fenetre(saumos_archive):
-    """Imagerie Sentinel-2 (Spec 06 §5, cran 2) : la FENÊTRE temporelle est calculée dès qu'un feu
-    a une date (la disponibilité RÉELLE = décidée côté client via carte-config.js, pas gated sur
-    l'env au rendu — un rebuild manuel n'a pas l'env). Fenêtre élargie AVANT la première détection
-    (07-22) pour assez de passages S2 clairs, finit APRÈS la dernière (07-27) + marge."""
+    """Imagerie Sentinel-2 (Spec 06 §5, cran 2) : POLITIQUE post-feu clair. La fenêtre commence au
+    DÉBUT du feu (première détection 07-22) et finit à la dernière + marge ; la vraie date est
+    résolue par carte.js via le WFS (le gabarit de légende porte un marqueur {date}). La
+    disponibilité (instance) est décidée client (un rebuild manuel n'a pas l'env)."""
     conn, config, saumos_id = saumos_archive
     env = make_env(config["generate"]["templates_dir"])
     ctx = load_fire_context(conn, config, saumos_id)
-    assert ctx["imagerie_from"] < "2026-07-22"
-    assert ctx["imagerie_to"] > "2026-07-27"
+    assert ctx["imagerie_from"] == "2026-07-22"        # début du feu (pas d'image pré-feu)
+    assert ctx["imagerie_to"] > "2026-07-27"           # dernière détection + marge
+    assert ctx["imagerie_maxcc"] == 20
+    assert "{date}" in ctx["imagerie_legende"]         # marqueur rempli par carte.js (vraie date WFS)
     page = render_feu(env, ctx)
-    assert f'data-img-from="{ctx["imagerie_from"]}"' in page and "data-img-to=" in page
-    assert "toggle-imagerie" in page and "Sentinel-2" in page   # toggle + légende toujours rendus
-    assert "l'étendue a pu évoluer" in page                     # réserve P0 (« pas un état courant »)
+    assert 'data-img-from="2026-07-22"' in page
+    assert "data-img-maxcc=" in page and "data-img-legend=" in page and "data-img-degrade=" in page
+    assert "toggle-imagerie" in page and "Sentinel-2" in page
+    assert "vue peu nuageuse" in page                          # réserve P0 (gabarit de légende)
+    assert "Pas encore de vue satellite claire" in page       # message dégradé honnête présent (« pas un état courant »)
 
 
 def test_carte_config_emet_instance_sentinelhub(db, tmp_path, monkeypatch):

@@ -320,29 +320,29 @@ def _chronologie(conn, config, event_id):
 
 
 def _imagerie_ctx(config: dict, fire) -> dict:
-    """Champs imagerie Sentinel-2 (Spec 06 §5, cran 2) — la FENÊTRE temporelle est calculée dès
-    qu'un feu a une date. La disponibilité RÉELLE (instance Sentinel Hub configurée) est décidée
-    CÔTÉ CLIENT (carte.js lit carte-config.js et masque le toggle sans instance) : ainsi un
-    `rebuild` manuel n'a pas besoin de l'env (seul le daemon lit /opt/vigifeu/.env pour écrire
-    carte-config.js). Fenêtre = première détection − before → dernière + after ; WMS = mostRecent."""
+    """Champs imagerie Sentinel-2 (Spec 06 §5, cran 2) — POLITIQUE : n'afficher que s'il existe un
+    passage S2 CLAIR DEPUIS le début du feu, avec sa VRAIE date (résolue côté client via le WFS,
+    carte.js). Ici on prépare la fenêtre à interroger `[première détection, dernière + after]` + le
+    seuil nuages + les gabarits de texte (la légende porte un `{date}` que carte.js remplit par la
+    date réelle ; sinon message dégradé). La disponibilité (instance configurée) est décidée client.
+    Un `rebuild` manuel n'a donc pas besoin de l'env (seul le daemon lit .env pour carte-config.js)."""
     if not fire["last_acq_at"]:
-        return {"imagerie_from": None, "imagerie_to": None,
-                "imagerie_toggle": None, "imagerie_legende": None}
+        return {"imagerie_from": None, "imagerie_to": None, "imagerie_maxcc": None,
+                "imagerie_toggle": None, "imagerie_legende": None, "imagerie_indispo": None}
     img = config.get("imagerie", {})
-    before = int(img.get("sentinelhub_before_days", 40))
-    after = int(img.get("sentinelhub_after_days", 10))
-    debut_src = fire["first_acq_at"] or fire["last_acq_at"]
-    debut_iso = (datetime.fromisoformat(debut_src.replace("Z", "+00:00"))
-                 - timedelta(days=before)).strftime("%Y-%m-%d")
+    after = int(img.get("sentinelhub_after_days", 30))
+    debut = fire["first_acq_at"]  # la fenêtre commence au DÉBUT du feu (post-feu seulement)
+    debut_iso = debut[:10]
     fin_iso = (datetime.fromisoformat(fire["last_acq_at"].replace("Z", "+00:00"))
                + timedelta(days=after)).strftime("%Y-%m-%d")
     return {
         "imagerie_from": debut_iso,
         "imagerie_to": fin_iso,
+        "imagerie_maxcc": int(img.get("sentinelhub_max_cloud_pct", 20)),
         "imagerie_toggle": fr.toggle_imagerie(),
-        "imagerie_legende": fr.legende_imagerie_s2(
-            fr.date_fr(fire["first_acq_at"] or fire["last_acq_at"]),
-            img.get("sentinelhub_source", "")),
+        # {date} = marqueur remplacé par carte.js avec la date réelle du passage clair retenu.
+        "imagerie_legende": fr.legende_imagerie_s2("{date}", img.get("sentinelhub_source", "")),
+        "imagerie_indispo": fr.imagerie_indispo(fr.date_fr(debut)),
     }
 
 

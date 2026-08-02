@@ -215,14 +215,18 @@ latence_nrt_max_h = 6
 # le dépôt ; write_carte_config l'écrit dans carte-config.js. Sans instance → pas d'imagerie
 # (dégradé). Auth par ID d'instance seul (vérifié : WMS GetMap 200 sans OAuth) → pas de proxy.
 sentinelhub_wms = "https://sh.dataspace.copernicus.eu/ogc/wms"
+sentinelhub_wfs = "https://sh.dataspace.copernicus.eu/ogc/wfs"   # liste les passages S2 + % nuages (auth ID)
+sentinelhub_typename = "DSS2"                                # source Sentinel-2 L2A dans le WFS
 sentinelhub_layer = "SWIR"                                  # nom de la couche dans l'instance CDSE
-sentinelhub_source = "Copernicus Sentinel-2 (fausse-couleur SWIR)"   # attribution + légende
-# Fenêtre temporelle du WMS = [première détection − before, dernière détection + after]. Sentinel-2
-# passe par bandes tous les ~5 j et les nuages en éliminent : une fenêtre trop courte laisse des trous
-# no-data (noir) sur la TERRE. ~40 j avant garantit assez de passages clairs pour couvrir la zone
-# (vérifié live) ; le mostRecent peu nuageux privilégie quand même les vues récentes (post-feu).
-sentinelhub_before_days = 40
-sentinelhub_after_days = 10   # marge après la dernière détection (capter la cicatrice post-feu)
+sentinelhub_source = "Copernicus Sentinel-2 — fausse-couleur SWIR"   # attribution + légende
+# Politique d'affichage (décision 2026-08-01) : n'afficher l'imagerie QUE s'il existe un passage
+# Sentinel-2 CLAIR (< max_cloud_pct de nuages) DEPUIS le début du feu, avec sa VRAIE date. Sinon
+# dégradé honnête (« pas encore de vue claire depuis le début du feu »). ⚠️ pour un feu ACTIF il
+# n'y a souvent pas encore de vue claire post-feu (nuages + repassage ~5 j) → imagerie surtout utile
+# sur les feux ARCHIVÉS. La date réelle est résolue via le WFS (carte.js), jamais devinée.
+# Fenêtre interrogée = [première détection, dernière + after]. Le WMS est ensuite épinglé à la date exacte.
+sentinelhub_after_days = 30   # marge après la dernière détection (chances d'un passage clair post-feu)
+sentinelhub_max_cloud_pct = 20   # seuil « clair » (%), filtré sur le WFS côté client
 
 [indicateurs]
 # Seuils de sévérité du bandeau d'indicateurs de la fiche feu (couleur = état, factuel).

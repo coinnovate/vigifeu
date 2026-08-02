@@ -50,6 +50,79 @@
     if (b) map.fitBounds(b, { padding: 30, maxZoom: 12, duration: 0 });
   }
 
+  // Imagerie Sentinel-2 (Spec 06 §5) — voir le commentaire au point d'appel dans initFeu.
+  function imageryToggle(el, map, geojson) {
+    var tImg = document.getElementById("toggle-imagerie");
+    var note = document.getElementById("imagerie-note");
+    var from = el.getAttribute("data-img-from");
+    var to = el.getAttribute("data-img-to");
+    var maxcc = parseFloat(el.getAttribute("data-img-maxcc") || "20");
+    var legendTpl = el.getAttribute("data-img-legend") || "";
+    var degrade = el.getAttribute("data-img-degrade") || "";
+    if (!(tImg && from && SH.instance && SH.wms && SH.wfs)) {
+      if (tImg && tImg.parentNode) tImg.parentNode.hidden = true;  // pas d'imagerie → pas de bouton mort
+      return;
+    }
+    var frDate = function (iso) { var p = iso.split("-"); return p[2] + "/" + p[1] + "/" + p[0]; };
+    var showNote = function (t) { if (note) { note.textContent = t; note.hidden = false; } };
+    var state = "idle";      // idle → loading → ready | none
+    var legendText = "";
+
+    function addImagery(date) {
+      if (map.getSource("imagerie")) return;
+      map.addSource("imagerie", {
+        type: "raster", tileSize: 512,
+        tiles: [SH.wms + "/" + SH.instance + "?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1" +
+                "&LAYERS=" + encodeURIComponent(SH.layer) + "&FORMAT=image/png&SRS=EPSG:3857" +
+                "&WIDTH=512&HEIGHT=512&TIME=" + date + "&BBOX={bbox-epsg-3857}"],
+        attribution: SH.source || "Copernicus Sentinel-2"
+      });
+      map.addLayer({ id: "imagerie", type: "raster", source: "imagerie" }, "cellules"); // sous les cellules
+    }
+
+    function resolve() {
+      var b = bounds(geojson);
+      // WFS EPSG:4326 attend miny,minx,maxy,maxx (lat,lon).
+      var bbox = b ? [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].join(",") : null;
+      var url = SH.wfs + "/" + SH.instance + "?SERVICE=WFS&REQUEST=GetFeature&TYPENAMES=" +
+                encodeURIComponent(SH.typename || "DSS2") + "&OUTPUTFORMAT=application/json" +
+                "&SRSNAME=EPSG:4326&BBOX=" + bbox + "&TIME=" + from + "/" + to;
+      state = "loading";
+      showNote("Recherche d'une vue satellite claire…");
+      fetch(url).then(function (r) { return r.json(); }).then(function (j) {
+        var best = null;   // date la plus récente < seuil de nuages
+        (j.features || []).forEach(function (f) {
+          var p = f.properties || {}, d = p.date, cc = p.cloudCoverPercentage;
+          if (d && d >= from && cc != null && cc <= maxcc && (best === null || d > best)) best = d;
+        });
+        if (best) {
+          state = "ready";
+          legendText = legendTpl.replace("{date}", frDate(best));
+          if (tImg.checked) { addImagery(best); showNote(legendText); }
+        } else {
+          state = "none";
+          if (tImg.checked) showNote(degrade);   // pas de vue claire post-feu → dégradé honnête
+        }
+      }).catch(function () { state = "none"; if (tImg.checked) showNote(degrade); });
+    }
+
+    tImg.addEventListener("change", function () {
+      if (!tImg.checked) {
+        if (map.getLayer("imagerie")) map.setLayoutProperty("imagerie", "visibility", "none");
+        if (note) note.hidden = true;
+        return;
+      }
+      if (state === "ready") {
+        if (map.getLayer("imagerie")) map.setLayoutProperty("imagerie", "visibility", "visible");
+        showNote(legendText);
+      } else if (state === "none") {
+        showNote(degrade);
+      } else if (state === "idle") {
+        resolve();
+      }  // "loading" : on attend la résolution en cours
+    });
+  }
+
   function initFeu(el, geojson) {
     var map = new maplibregl.Map({ container: el, style: fond(), center: [2.5, 46.6], zoom: 5 });
     map.addControl(new maplibregl.NavigationControl(), "top-right");
@@ -87,31 +160,13 @@
           "circle-opacity": 0.85
         }
       });
-      // Imagerie Sentinel-2 (Spec 06 §5, cran 2) : calque WMS SWIR SOUS les cellules (le feu
-      // reste au-dessus), opt-in. La fenêtre temporelle vient du feu (data-img-from/to) ; le WMS
-      // renvoie la vue mostRecent peu nuageuse. Auth par ID d'instance seul (pas d'OAuth). Sans
-      // instance/fenêtre : pas de calque, et on masque le toggle (pas de bouton mort).
-      var imgFrom = el.getAttribute("data-img-from");
-      var imgTo = el.getAttribute("data-img-to");
-      var tImg = document.getElementById("toggle-imagerie");
-      if (imgFrom && SH.instance && SH.wms) {
-        map.addSource("imagerie", {
-          type: "raster", tileSize: 512,
-          tiles: [SH.wms + "/" + SH.instance + "?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1" +
-                  "&LAYERS=" + encodeURIComponent(SH.layer) + "&FORMAT=image/png&SRS=EPSG:3857" +
-                  "&WIDTH=512&HEIGHT=512&TIME=" + imgFrom + "/" + imgTo + "&BBOX={bbox-epsg-3857}"],
-          attribution: SH.source || "Copernicus Sentinel-2"
-        });
-        map.addLayer({ id: "imagerie", type: "raster", source: "imagerie",
-                       layout: { visibility: "none" } }, "cellules");   // sous les cellules
-        var note = document.getElementById("imagerie-note");
-        if (tImg) tImg.addEventListener("change", function () {
-          map.setLayoutProperty("imagerie", "visibility", tImg.checked ? "visible" : "none");
-          if (note) note.hidden = !tImg.checked;   // la réserve P0 n'apparaît qu'avec l'image
-        });
-      } else if (tImg && tImg.parentNode) {
-        tImg.parentNode.hidden = true;   // pas d'imagerie disponible → pas de toggle mort
-      }
+      // Imagerie Sentinel-2 (Spec 06 §5, cran 2) — POLITIQUE : n'afficher QUE s'il existe un passage
+      // S2 CLAIR depuis le début du feu, avec sa VRAIE date. Au 1er clic sur le toggle, on interroge
+      // le WFS (auth par ID d'instance, sans OAuth) pour les passages [from, to] + % nuages, on retient
+      // le plus récent < seuil, on épingle le WMS à CETTE date et on affiche la date réelle. Aucun
+      // passage clair → dégradé honnête (jamais une image antérieure au feu, trompeuse). Calque SOUS
+      // les cellules (le feu reste au-dessus). Sans instance/WFS/fenêtre : toggle masqué (pas de bouton mort).
+      imageryToggle(el, map, geojson);
       var popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
       map.on("mouseenter", "poi", function (e) {
         map.getCanvas().style.cursor = "help";

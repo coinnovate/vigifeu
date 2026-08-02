@@ -71,9 +71,9 @@
    Présente seulement si une instance Sentinel Hub est configurée (dégradé sinon). #}
 <label class="toggle-imagerie"><input type="checkbox" id="toggle-imagerie"> {{ imagerie_toggle }}</label>
 {% endif %}
-<div class="carte" data-carte="feu" data-geojson="feu.geojson"{% if imagerie_from %} data-img-from="{{ imagerie_from }}" data-img-to="{{ imagerie_to }}"{% endif %} role="img"
+<div class="carte" data-carte="feu" data-geojson="feu.geojson"{% if imagerie_from %} data-img-from="{{ imagerie_from }}" data-img-to="{{ imagerie_to }}" data-img-maxcc="{{ imagerie_maxcc }}" data-img-legend="{{ imagerie_legende }}" data-img-degrade="{{ imagerie_indispo }}"{% endif %} role="img"
      aria-label="Carte des zones détectées du feu ; description complète dans la synthèse ci-dessus"></div>
-{% if imagerie_from %}<p class="note imagerie-note" hidden id="imagerie-note">{{ imagerie_legende }}</p>{% endif %}
+{% if imagerie_from %}<p class="note imagerie-note" hidden id="imagerie-note"></p>{% endif %}
 <noscript><p class="indispo">La carte interactive nécessite JavaScript. La synthèse et la chronologie ci-dessus décrivent le feu sans carte.</p></noscript>
 </section>
 

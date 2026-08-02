@@ -199,13 +199,20 @@ def toggle_imagerie() -> str:
     return "Afficher l'imagerie satellite (Sentinel-2)"
 
 
-def legende_imagerie_s2(date_debut: str, source: str) -> str:
-    """Légende P0 obligatoire de l'imagerie Sentinel-2 (Spec 06 §5) : image = OBSERVATION DATÉE,
-    jamais un état courant. Le WMS renvoie la vue mostRecent peu nuageuse sur la période du feu :
-    on annonce donc « la plus récente depuis le début » (date exacte non déterministe), la source,
-    et que l'étendue a pu évoluer."""
-    return (f"Image {source} — vue la plus récente peu nuageuse depuis le début du feu "
-            f"({date_debut}) : l'étendue a pu évoluer depuis.")
+def legende_imagerie_s2(date_reelle: str, source: str) -> str:
+    """Légende P0 de l'imagerie Sentinel-2 (Spec 06 §5) : image = OBSERVATION DATÉE. `date_reelle`
+    est la VRAIE date d'acquisition du passage clair retenu (résolue par le WFS côté client — feu.py
+    passe le marqueur littéral « {date} » que carte.js remplace)."""
+    return (f"Image satellite du {date_reelle} ({source}) — vue peu nuageuse à cette date : "
+            "l'étendue a pu évoluer depuis.")
+
+
+def imagerie_indispo(date_debut: str) -> str:
+    """Message dégradé honnête (Spec 06 §5, P6) quand AUCUNE vue Sentinel-2 claire n'existe depuis
+    le début du feu (nuages + repassage ~5 j) — fréquent sur un feu actif. Jamais d'image trompeuse
+    (ex. une vue antérieure au feu) : on dit simplement qu'il n'y en a pas encore."""
+    return (f"Pas encore de vue satellite claire depuis le début du feu ({date_debut}) — "
+            "nuages ou repassage du satellite (~5 jours).")
 
 
 def libelle_cycle_de_vie(
