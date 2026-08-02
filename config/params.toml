@@ -207,16 +207,22 @@ wave_min_history_fires = 3
 latence_nrt_max_h = 6
 
 [imagerie]
-# Spec 06 §5 — cran léger : calque de tuiles NASA GIBS (vraie-couleur quotidienne, gratuit,
-# géoréférencé) daté au jour du feu, activable sur la carte de fiche. Discipline P0 : une image
-# est une OBSERVATION DATÉE, jamais un état courant (légende « l'étendue a pu évoluer depuis »).
-# Lu par write_carte_config → window.SENTIFEU_GIBS. Le cran riche (cicatrice Sentinel-2 SWIR) = v2.
-gibs_url = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best"
-gibs_layer = "VIIRS_SNPP_CorrectedReflectance_TrueColor"   # vraie couleur 250 m (panache de fumée)
-gibs_matrixset = "GoogleMapsCompatible_Level9"
-gibs_ext = "jpg"
-gibs_maxzoom = 9
-gibs_source = "NASA GIBS — VIIRS/SNPP, vraie couleur"       # attribution + légende
+# Spec 06 §5 — cran 2 : calque Sentinel-2 10 m (fausse-couleur SWIR « brûlure ») via CDSE
+# Sentinel Hub WMS, daté sur la fenêtre du feu (mostRecent peu nuageux). 25× plus fin que le
+# GIBS quotidien 250 m d'avant : la cicatrice ressort. Discipline P0 : image = OBSERVATION
+# DATÉE, jamais un état courant (légende « l'étendue a pu évoluer »). L'ID d'instance est
+# SEMI-PUBLIC (comme la clé MapTiler) → variable d'env VIGIFEU_SENTINELHUB_INSTANCE, jamais dans
+# le dépôt ; write_carte_config l'écrit dans carte-config.js. Sans instance → pas d'imagerie
+# (dégradé). Auth par ID d'instance seul (vérifié : WMS GetMap 200 sans OAuth) → pas de proxy.
+sentinelhub_wms = "https://sh.dataspace.copernicus.eu/ogc/wms"
+sentinelhub_layer = "SWIR"                                  # nom de la couche dans l'instance CDSE
+sentinelhub_source = "Copernicus Sentinel-2 (fausse-couleur SWIR)"   # attribution + légende
+# Fenêtre temporelle du WMS = [première détection − before, dernière détection + after]. Sentinel-2
+# passe par bandes tous les ~5 j et les nuages en éliminent : une fenêtre trop courte laisse des trous
+# no-data (noir) sur la TERRE. ~40 j avant garantit assez de passages clairs pour couvrir la zone
+# (vérifié live) ; le mostRecent peu nuageux privilégie quand même les vues récentes (post-feu).
+sentinelhub_before_days = 40
+sentinelhub_after_days = 10   # marge après la dernière détection (capter la cicatrice post-feu)
 
 [indicateurs]
 # Seuils de sévérité du bandeau d'indicateurs de la fiche feu (couleur = état, factuel).

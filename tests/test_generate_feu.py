@@ -302,6 +302,41 @@ def test_carte_config_isole_la_cle(db, tmp_path, monkeypatch):
     assert '""' in contenu2
 
 
+def test_imagerie_sentinel2_gated_sur_instance(saumos_archive, monkeypatch):
+    """Imagerie Sentinel-2 (Spec 06 §5, cran 2) : présente SEULEMENT si une instance Sentinel Hub
+    est configurée (env). Sans env → aucune UI (pas de toggle mort) ; avec env → fenêtre datée
+    (première détection → dernière + marge) + toggle + réserve P0."""
+    conn, config, saumos_id = saumos_archive
+    env = make_env(config["generate"]["templates_dir"])
+    monkeypatch.delenv("VIGIFEU_SENTINELHUB_INSTANCE", raising=False)
+    ctx = load_fire_context(conn, config, saumos_id)
+    assert ctx["imagerie_from"] is None
+    assert "toggle-imagerie" not in render_feu(env, ctx)
+
+    monkeypatch.setenv("VIGIFEU_SENTINELHUB_INSTANCE", "test-instance-id")
+    ctx2 = load_fire_context(conn, config, saumos_id)
+    # Fenêtre élargie : commence AVANT la première détection (07-22) pour assez de passages S2
+    # clairs, finit APRÈS la dernière (07-27) + marge. mostRecent privilégie quand même le récent.
+    assert ctx2["imagerie_from"] < "2026-07-22"
+    assert ctx2["imagerie_to"] > "2026-07-27"
+    page = render_feu(env, ctx2)
+    assert f'data-img-from="{ctx2["imagerie_from"]}"' in page and "data-img-to=" in page
+    assert "Sentinel-2" in page                            # toggle + légende
+    assert "l'étendue a pu évoluer" in page                # réserve P0 (honnêteté « pas un état courant »)
+
+
+def test_carte_config_emet_instance_sentinelhub(db, tmp_path, monkeypatch):
+    """L'ID d'instance Sentinel Hub (semi-public) sort dans carte-config.js depuis l'env, jamais
+    du dépôt — même patron que la clé MapTiler."""
+    conn, config = db
+    cfg = {**config, "generate": {**config["generate"], "site_dir": str(tmp_path / "s")}}
+    monkeypatch.setenv("VIGIFEU_SENTINELHUB_INSTANCE", "INST-XYZ")
+    contenu = write_carte_config(cfg).read_text(encoding="utf-8")
+    assert "SENTIFEU_SH" in contenu and "INST-XYZ" in contenu
+    monkeypatch.delenv("VIGIFEU_SENTINELHUB_INSTANCE")
+    assert '"instance": ""' in write_carte_config(cfg).read_text(encoding="utf-8")
+
+
 def test_finalize_site_seo_geo(saumos_archive, tmp_path):
     import copy
 

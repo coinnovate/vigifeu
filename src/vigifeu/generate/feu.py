@@ -8,7 +8,9 @@ La page est une fonction pure de la base (Spec 04 P1) → golden file possible (
 
 from __future__ import annotations
 
+import os
 import sqlite3
+from datetime import datetime, timedelta
 
 from jinja2 import Environment
 from shapely import wkt
@@ -318,6 +320,32 @@ def _chronologie(conn, config, event_id):
     return lignes
 
 
+def _imagerie_ctx(config: dict, fire) -> dict:
+    """Champs imagerie Sentinel-2 (Spec 06 §5, cran 2) — présents seulement si une instance
+    Sentinel Hub est configurée (env VIGIFEU_SENTINELHUB_INSTANCE) ET le feu a une date. Fenêtre
+    temporelle = première détection → dernière + marge (capter la cicatrice post-feu) ; le WMS
+    renvoie la vue mostRecent peu nuageuse. Sinon tout None → aucune UI d'imagerie (dégradé)."""
+    if not (os.environ.get("VIGIFEU_SENTINELHUB_INSTANCE") and fire["last_acq_at"]):
+        return {"imagerie_from": None, "imagerie_to": None,
+                "imagerie_toggle": None, "imagerie_legende": None}
+    img = config.get("imagerie", {})
+    before = int(img.get("sentinelhub_before_days", 40))
+    after = int(img.get("sentinelhub_after_days", 10))
+    debut_src = fire["first_acq_at"] or fire["last_acq_at"]
+    debut_iso = (datetime.fromisoformat(debut_src.replace("Z", "+00:00"))
+                 - timedelta(days=before)).strftime("%Y-%m-%d")
+    fin_iso = (datetime.fromisoformat(fire["last_acq_at"].replace("Z", "+00:00"))
+               + timedelta(days=after)).strftime("%Y-%m-%d")
+    return {
+        "imagerie_from": debut_iso,
+        "imagerie_to": fin_iso,
+        "imagerie_toggle": fr.toggle_imagerie(),
+        "imagerie_legende": fr.legende_imagerie_s2(
+            fr.date_fr(fire["first_acq_at"] or fire["last_acq_at"]),
+            img.get("sentinelhub_source", "")),
+    }
+
+
 def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> dict:
     fire = _fire_row(conn, event_id)
     relations = _relations(conn, event_id)
@@ -386,16 +414,13 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
         "last_acq": fr.horodatage(fire["last_acq_at"]) if fire["last_acq_at"] else None,
         "bandeau_archive": (fr.bandeau_archive(fire["last_acq_at"])
                             if fire["lifecycle"] == "archive" and fire["last_acq_at"] else None),
-        # Imagerie GIBS (Spec 06 §5, cran léger) : calque satellite daté au jour du feu.
-        # Discipline P0 : date d'acquisition = celle de la donnée (dernière détection), légende
-        # « l'étendue a pu évoluer ». La tuile datée est construite côté carte.js (data-img-date).
-        "imagerie_date": fire["last_acq_at"][:10] if fire["last_acq_at"] else None,
-        "imagerie_toggle": (fr.toggle_imagerie(fr.date_fr(fire["last_acq_at"]))
-                            if fire["last_acq_at"] else None),
-        "imagerie_legende": (
-            fr.legende_imagerie(fr.date_fr(fire["last_acq_at"]),
-                                config.get("imagerie", {}).get("gibs_source", ""))
-            if fire["last_acq_at"] else None),
+        # Imagerie Sentinel-2 (Spec 06 §5, cran 2) : calque WMS daté sur la FENÊTRE du feu
+        # (première détection → dernière + marge), le WMS renvoyant l'image mostRecent peu
+        # nuageuse. Disponible seulement si une instance Sentinel Hub est configurée (env) —
+        # sinon dégradé silencieux (pas de toggle mort). Discipline P0 : la légende dit « vue
+        # la plus récente sur la période, l'étendue a pu évoluer » (date exacte côté serveur inconnue
+        # avec mostRecent). **imagerie_from gate tout le bloc dans le gabarit.**
+        **_imagerie_ctx(config, fire),
         "synthese": synthese,
         "communes_groupes": _groupes_communes(relations, _REL_PRINCIPAUX),
         "communes_groupes_eloignes": _groupes_communes(relations, _REL_ELOIGNES),

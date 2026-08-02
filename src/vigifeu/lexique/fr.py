@@ -194,16 +194,18 @@ def surface_estimee_courte(ha: float) -> str:
     return f"≈ {nombre_fr(ha)} ha (estimé)"
 
 
-def toggle_imagerie(date_affichee: str) -> str:
-    """Libellé du toggle d'imagerie satellite (carte de fiche, Spec 06 §5)."""
-    return f"Afficher l'imagerie satellite du {date_affichee}"
+def toggle_imagerie() -> str:
+    """Libellé du toggle d'imagerie satellite (carte de fiche, Spec 06 §5, cran 2)."""
+    return "Afficher l'imagerie satellite (Sentinel-2)"
 
 
-def legende_imagerie(date_affichee: str, source: str) -> str:
-    """Légende P0 obligatoire de l'imagerie (Spec 06 §5) : image = OBSERVATION DATÉE, jamais un
-    état courant. Rappelle la date d'acquisition, la source, et que l'étendue a pu évoluer."""
-    return (f"Image du {date_affichee} ({source}) — vue satellite à cette date : "
-            "l'étendue a pu évoluer depuis.")
+def legende_imagerie_s2(date_debut: str, source: str) -> str:
+    """Légende P0 obligatoire de l'imagerie Sentinel-2 (Spec 06 §5) : image = OBSERVATION DATÉE,
+    jamais un état courant. Le WMS renvoie la vue mostRecent peu nuageuse sur la période du feu :
+    on annonce donc « la plus récente depuis le début » (date exacte non déterministe), la source,
+    et que l'étendue a pu évoluer."""
+    return (f"Image {source} — vue la plus récente peu nuageuse depuis le début du feu "
+            f"({date_debut}) : l'étendue a pu évoluer depuis.")
 
 
 def libelle_cycle_de_vie(

@@ -126,20 +126,20 @@ def write_carte_config(config: dict) -> Path:
     """
     key = os.environ.get("VIGIFEU_MAPTILER_KEY", "")
     mapid = config["generate"].get("maptiler_map", "dataviz")
-    # Config imagerie GIBS (Spec 06 §5) — pas de secret, pas de clé : données NASA libres.
+    # Config imagerie Sentinel-2 via CDSE Sentinel Hub (Spec 06 §5, cran 2). L'ID d'instance
+    # est SEMI-PUBLIC (comme la clé MapTiler) : il vient de l'env, jamais du dépôt. Sans instance,
+    # `instance` reste vide → carte.js n'ajoute pas l'imagerie (dégradé, toggle masqué).
     img = config.get("imagerie", {})
-    gibs = {
-        "url": img.get("gibs_url", ""),
-        "layer": img.get("gibs_layer", ""),
-        "matrixset": img.get("gibs_matrixset", ""),
-        "ext": img.get("gibs_ext", "jpg"),
-        "maxzoom": img.get("gibs_maxzoom", 9),
-        "source": img.get("gibs_source", ""),
+    sh = {
+        "wms": img.get("sentinelhub_wms", ""),
+        "layer": img.get("sentinelhub_layer", ""),
+        "instance": os.environ.get("VIGIFEU_SENTINELHUB_INSTANCE", ""),
+        "source": img.get("sentinelhub_source", ""),
     }
     js = (
         f"window.SENTIFEU_MAPTILER_KEY = {json.dumps(key)};\n"
         f"window.SENTIFEU_MAPTILER_MAP = {json.dumps(mapid)};\n"
-        f"window.SENTIFEU_GIBS = {json.dumps(gibs, ensure_ascii=False)};\n"
+        f"window.SENTIFEU_SH = {json.dumps(sh, ensure_ascii=False)};\n"
     )
     dst = Path(config["generate"]["site_dir"]) / "static" / "carte-config.js"
     return write_atomic(dst, js)

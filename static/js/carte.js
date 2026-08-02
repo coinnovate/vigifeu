@@ -7,7 +7,7 @@
   "use strict";
   var KEY = window.SENTIFEU_MAPTILER_KEY || "";
   var MAP = window.SENTIFEU_MAPTILER_MAP || "dataviz";
-  var GIBS = window.SENTIFEU_GIBS || {};   // imagerie satellite datée (Spec 06 §5)
+  var SH = window.SENTIFEU_SH || {};   // imagerie Sentinel-2 via CDSE Sentinel Hub (Spec 06 §5)
 
   // Couleurs du cycle de vie — doublées par l'ordre des couches, pas seulement la teinte.
   var COULEUR = { front_actif: "#c0392b", recent: "#e67e22", plus_detecte: "#8a8a8a" };
@@ -87,25 +87,30 @@
           "circle-opacity": 0.85
         }
       });
-      // Imagerie satellite datée (Spec 06 §5) : calque GIBS SOUS les cellules (le feu reste
-      // au-dessus), opt-in via le toggle. La date vient du feu (data-img-date). Sans config
-      // GIBS ou sans date, on ne l'ajoute pas (dégradé silencieux).
-      var imgDate = el.getAttribute("data-img-date");
-      if (imgDate && GIBS.url && GIBS.layer) {
+      // Imagerie Sentinel-2 (Spec 06 §5, cran 2) : calque WMS SWIR SOUS les cellules (le feu
+      // reste au-dessus), opt-in. La fenêtre temporelle vient du feu (data-img-from/to) ; le WMS
+      // renvoie la vue mostRecent peu nuageuse. Auth par ID d'instance seul (pas d'OAuth). Sans
+      // instance/fenêtre : pas de calque, et on masque le toggle (pas de bouton mort).
+      var imgFrom = el.getAttribute("data-img-from");
+      var imgTo = el.getAttribute("data-img-to");
+      var tImg = document.getElementById("toggle-imagerie");
+      if (imgFrom && SH.instance && SH.wms) {
         map.addSource("imagerie", {
-          type: "raster", tileSize: 256, maxzoom: GIBS.maxzoom || 9,
-          tiles: [GIBS.url + "/" + GIBS.layer + "/default/" + imgDate + "/" +
-                  GIBS.matrixset + "/{z}/{y}/{x}." + (GIBS.ext || "jpg")],
-          attribution: GIBS.source || "NASA GIBS"
+          type: "raster", tileSize: 512,
+          tiles: [SH.wms + "/" + SH.instance + "?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1" +
+                  "&LAYERS=" + encodeURIComponent(SH.layer) + "&FORMAT=image/png&SRS=EPSG:3857" +
+                  "&WIDTH=512&HEIGHT=512&TIME=" + imgFrom + "/" + imgTo + "&BBOX={bbox-epsg-3857}"],
+          attribution: SH.source || "Copernicus Sentinel-2"
         });
         map.addLayer({ id: "imagerie", type: "raster", source: "imagerie",
                        layout: { visibility: "none" } }, "cellules");   // sous les cellules
-        var tImg = document.getElementById("toggle-imagerie");
         var note = document.getElementById("imagerie-note");
         if (tImg) tImg.addEventListener("change", function () {
           map.setLayoutProperty("imagerie", "visibility", tImg.checked ? "visible" : "none");
           if (note) note.hidden = !tImg.checked;   // la réserve P0 n'apparaît qu'avec l'image
         });
+      } else if (tImg && tImg.parentNode) {
+        tImg.parentNode.hidden = true;   // pas d'imagerie disponible → pas de toggle mort
       }
       var popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
       map.on("mouseenter", "poi", function (e) {
