@@ -357,7 +357,12 @@ def recompute_poi_dedup(conn: sqlite3.Connection, config: dict) -> dict:
     de superseded_by=NULL et on retraite dans l'ordre de priorité, indépendamment de l'ordre
     d'import. Rejouable sans effet de bord.
     """
-    radius = config["poi"]["dedup_radius_m"]
+    # Rayon par catégorie : dict {default, <cat>...} ou nombre nu (rétro-compat).
+    raw_radius = config["poi"]["dedup_radius_m"]
+    if isinstance(raw_radius, dict):
+        default_radius, per_cat_radius = raw_radius.get("default", 150), raw_radius
+    else:
+        default_radius, per_cat_radius = raw_radius, {}
     priority = config["poi"].get("source_priority") or []
     rank = {src: i for i, src in enumerate(priority)}
     fallback = len(priority)  # source hors liste = priorité la plus faible
@@ -374,7 +379,8 @@ def recompute_poi_dedup(conn: sqlite3.Connection, config: dict) -> dict:
             {"id": r["id"], "source": r["source"], "pt": Point(x, y)}
         )
 
-    for items in by_cat.values():
+    for cat, items in by_cat.items():
+        radius = per_cat_radius.get(cat, default_radius)
         pts = [it["pt"] for it in items]
         tree = STRtree(pts) if pts else None
         if tree is None:

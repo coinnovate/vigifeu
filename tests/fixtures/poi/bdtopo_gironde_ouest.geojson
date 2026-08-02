@@ -13,12 +13,12 @@
     },
     {
       "type": "Feature",
-      "properties": { "cleabs": "ENSEIGNEMENT_0002", "nature": "École élémentaire", "toponyme": "École élémentaire du Bourg" },
+      "properties": { "cleabs": "ENSEIGNEMENT_0002", "nature": "Enseignement primaire", "toponyme": "École élémentaire du Bourg" },
       "geometry": { "type": "Point", "coordinates": [-1.1600, 44.8300] }
     },
     {
       "type": "Feature",
-      "properties": { "cleabs": "ETABLISSEMENT_SANTE_0003", "nature": "Centre hospitalier", "toponyme": "Centre hospitalier des Landes" },
+      "properties": { "cleabs": "ETABLISSEMENT_SANTE_0003", "nature": "Hôpital", "toponyme": "Centre hospitalier des Landes" },
       "geometry": { "type": "Point", "coordinates": [-1.2050, 44.7500] }
     },
     {

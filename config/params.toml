@@ -77,28 +77,32 @@ osm_rules = [
     { category = "station_service", match = { amenity = "fuel" } },
 ]
 # Spec 06 §2.2 / §8 — import BD TOPO (IGN, thème « Services et activités », data.geopf.fr).
-# 2ᵉ source : mêmes catégories qu'OSM mais officielles/fraîches (Etalab). On balaie toutes
-# les couches géométriques du GeoPackage et on catégorise par l'attribut `nature` (comparaison
-# insensible à la casse/accents). ⚠️ HYPOTHÈSE DE FORMAT : les valeurs `nature` réelles sont à
-# confirmer contre un GeoPackage BD TOPO (comme les fetchers drought/bdiff) — cette table est
-# le seul point à ajuster. La dédup vs OSM se fait ensuite (bdtopo_source_priority + passe dédup).
+# 2ᵉ source : catégories officielles/fraîches (Etalab). Valeurs `nature` VÉRIFIÉES live
+# (2026-08-01) contre la couche RÉELLE `zone_d_activite_ou_d_interet` (BD TOPO V3, WFS
+# Géoplateforme) — PAS de couches séparées santé/enseignement en V3 : une seule couche PAI
+# catégorisée par `nature`. Match insensible casse/accents. station_service ABSENT de BD TOPO
+# (reste couvert par OSM seul). La dédup vs OSM se fait ensuite (source_priority + passe dédup).
 bdtopo_rules = [
-    { category = "camping",         match = { nature = "Camping" } },
-    { category = "hopital",         match = { nature = "Centre hospitalier" } },
-    { category = "hopital",         match = { nature = "Hôpital" } },
-    { category = "hopital",         match = { nature = "Clinique" } },
-    { category = "ehpad",           match = { nature = "Maison de retraite" } },
-    { category = "ecole",           match = { nature = "École maternelle" } },
-    { category = "ecole",           match = { nature = "École élémentaire" } },
-    { category = "ecole",           match = { nature = "Collège" } },
-    { category = "ecole",           match = { nature = "Lycée" } },
-    { category = "station_service", match = { nature = "Station-service" } },
+    { category = "camping", match = { nature = "Camping" } },
+    { category = "hopital", match = { nature = "Hôpital" } },
+    { category = "hopital", match = { nature = "Etablissement hospitalier" } },
+    { category = "ehpad",   match = { nature = "Maison de retraite" } },
+    { category = "ecole",   match = { nature = "Enseignement primaire" } },
+    { category = "ecole",   match = { nature = "Collège" } },
+    { category = "ecole",   match = { nature = "Lycée" } },
+    { category = "ecole",   match = { nature = "Autre établissement d'enseignement" } },
 ]
 # Spec 06 §2.3 — déduplication inter-sources. Deux POI de sources DIFFÉRENTES, même catégorie,
-# à moins de dedup_radius_m l'un de l'autre = même enjeu physique → un seul compte. On garde le
-# POI de la source la PLUS prioritaire (fraîcheur/qualité), l'autre est marqué superseded_by.
-# BD TOPO (officiel, frais) prime sur OSM ; Géorisques est seul sur icpe_seveso.
-dedup_radius_m = 150
+# à moins du rayon l'un de l'autre = même enjeu physique → un seul compte. On garde le POI de la
+# source la PLUS prioritaire (fraîcheur/qualité), l'autre est marqué superseded_by. BD TOPO
+# (officiel, frais) prime sur OSM ; Géorisques est seul sur icpe_seveso.
+# Rayon PAR CATÉGORIE (défaut + surcharges) — calé sur la vraie donnée (2026-08-01) : les campings
+# ont une grande emprise → centroïde de zone BD TOPO vs point OSM éloignés (« la Grigne » à 210 m),
+# d'où 250 m ; les écoles/hôpitaux sont ponctuels (twins à ~8 m) → 150 m suffit, agrandir ne ferait
+# qu'augmenter le risque de fusionner deux établissements voisins distincts. ⚠️ dédup par distance
+# seule = approximation (résolution d'entités) ; un appariement par similarité de NOM affinerait
+# (amélioration ultérieure). Erreur résiduelle faible et bornée par catégorie.
+dedup_radius_m = { default = 150, camping = 250 }
 source_priority = ["bdtopo", "georisques", "osm"]
 # Spec 06 §2.2 / §8 — import Géorisques (3ᵉ source). Périmètre v1 : Seveso SEUL (seuil haut/bas)
 # — sous-ensemble à fort enjeu, bien géolocalisé (les ICPE simples, géoloc grossière, en v1.1).

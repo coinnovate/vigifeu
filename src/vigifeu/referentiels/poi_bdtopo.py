@@ -1,24 +1,25 @@
 """Import BD TOPO du référentiel POI (Spec 06 §2.2, phase 2, bloc 1, étape 8).
 
-Deuxième source du référentiel POI, après OSM (`poi_osm.py`). BD TOPO (IGN, thème
-« Services et activités ») donne les mêmes catégories qu'OSM mais **officielles et
-fraîches** (Etalab) : santé (`etablissement_de_sante`), enseignement (`enseignement`),
-points d'activité dont campings/stations-service (`point_d_activite_ou_d_interet`).
+Deuxième source du référentiel POI, après OSM (`poi_osm.py`). BD TOPO (IGN) donne des
+catégories **officielles et fraîches** (Etalab). ⚠️ VÉRIFIÉ live (2026-08-01) : BD TOPO **V3**
+n'a PAS de couches séparées santé/enseignement — les POI d'enjeu vivent dans une **unique
+couche `zone_d_activite_ou_d_interet`** (les PAI), catégorisée par l'attribut `nature`
+(« Camping », « Hôpital », « Enseignement primaire », « Maison de retraite »…). Champs utiles :
+`cleabs` (clé), `nature`, `toponyme` (nom), géométrie surfacique (on prend le centroïde).
 
 Deux formats, une normalisation — **exactement le pattern de `communes.py`** :
 
-- **GeoPackage** (production : `data.geopf.fr/telechargement/resource/BDTOPO`, même
-  plateforme qu'Admin Express, Lot 3) — SQLite lu en pur Python, géométries décodées
-  via le GPB de `communes.py` (réutilisé). Métropole = Lambert-93, reprojeté WGS84.
-- **GeoJSON** (fixture de test) — déjà en WGS84.
+- **GeoJSON** (voie recommandée) — WFS Géoplateforme
+  (`data.geopf.fr/wfs/ows`, `TYPENAMES=BDTOPO_V3:zone_d_activite_ou_d_interet`,
+  `OUTPUTFORMAT=application/json&SRSNAME=CRS:84`) : léger, ciblé sur la seule couche utile,
+  déjà en WGS84. Sert aussi de fixture de test.
+- **GeoPackage** (`data.geopf.fr/telechargement/resource/BDTOPO`, comme Admin Express) —
+  SQLite lu en pur Python, géométries décodées via le GPB de `communes.py` (réutilisé),
+  Lambert-93 reprojeté WGS84. ⚠️ balaie TOUTES les couches géométriques : sur un GPKG BD TOPO
+  complet (bâti = millions d'objets) c'est lent — préférer un GPKG déjà filtré, ou le WFS.
 
-Un POI BD TOPO peut être un point (établissement) ou une surface (zone d'activité) : on
-prend le **point représentatif** (centroïde), cohérent avec le stockage lat/lon de `poi`.
-
-Catégorisation par règles config `[poi].bdtopo_rules` (attribut `nature` → catégorie).
-⚠️ HYPOTHÈSE DE FORMAT (comme bdiff/drought) : les valeurs `nature` réelles sont à
-confirmer contre un GeoPackage BD TOPO ; toute la logique de mapping est en config, seule
-à ajuster. Upsert idempotent par (`source='bdtopo'`, `source_ref=cleabs`).
+Catégorisation par règles config `[poi].bdtopo_rules` (attribut `nature` → catégorie ;
+valeurs réelles vérifiées). Upsert idempotent par (`source='bdtopo'`, `source_ref=cleabs`).
 """
 
 from __future__ import annotations

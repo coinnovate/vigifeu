@@ -45,7 +45,7 @@ def _make_bdtopo_gpkg(path: Path) -> None:
         )
     db.execute(
         'INSERT INTO etablissement_de_sante VALUES (?, ?, ?, ?)',
-        ("SANTE_1", "Clinique", "Clinique du Bassin", _gpb_l93(44.7500, -1.2050)),
+        ("SANTE_1", "Hôpital", "Hôpital du Bassin", _gpb_l93(44.7500, -1.2050)),
     )
     db.execute(
         'INSERT INTO enseignement VALUES (?, ?, ?, ?)',
