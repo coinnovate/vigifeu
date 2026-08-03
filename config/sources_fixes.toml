@@ -1,0 +1,27 @@
+# Géofence des sources fixes industrielles connues (Spec 02 §5.1, R1).
+#
+# Grands complexes thermiques permanents (aciéries, raffineries, torchères) qui
+# « brûlent » 24/7 sans être des feux de végétation. La voie automatique R1
+# (qualify.py) ne capte qu'une source COMPACTE et FROIDE (emprise ≤ e_fixe_m = 1200 m,
+# frp_median ≤ f_fixe_mw = 8 MW). Un complexe ÉTENDU et CHAUD échoue sur les deux
+# critères, part en `vegetation_confirme` (voie « feu franc »), et n'est donc jamais
+# promu en candidat pour revue. On l'exclut ici explicitement.
+#
+# Import idempotent :   vigifeu sources-fixes-import
+# Puis reprendre l'historique (les feux déjà formés ne se démarquent pas seuls) :
+#                       vigifeu rejeu   (daemon arrêté — écrivain unique)
+#                       vigifeu rebuild
+#
+# Un hotspot tombant dans `radius_m` d'une de ces zones est marqué `fixed_source_id`
+# et exclu du clustering (mark_fixed_sources). Clé naturelle = `nom` (idempotence).
+#
+# ⚠️ Un rayon exclut de VRAIES détections : à ne poser que sur des zones industrielles
+# vérifiées. N'ajouter Fos-sur-Mer, Le Havre/Gonfreville, Lacq, Berre… qu'avec des
+# coordonnées et un rayon confirmés (fond de carte / cadastre), pas au jugé.
+
+[[source]]
+nom = "Dunkerque — complexe portuaire et sidérurgique"
+lat = 51.0345          # centroïde des détections FIRMS (aciérie ArcelorMittal + port ouest)
+lon = 2.2857
+radius_m = 3000        # couvre l'emprise observée (~656 ha) sans mordre sur Dunkerque-centre (~6 km E)
+kind = "acierie"

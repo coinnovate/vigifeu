@@ -113,6 +113,45 @@ def promote_candidates(conn: sqlite3.Connection, config: dict, *, stamp: str) ->
     return created
 
 
+def import_fixed_sources(conn: sqlite3.Connection, sources: list[dict], *, stamp: str) -> dict:
+    """Enregistre un géofence de sources fixes **connues** en `confirme` (§5.1).
+
+    Certains complexes industriels (aciéries, raffineries) sont trop ÉTENDUS ou trop
+    CHAUDS pour la voie automatique R1 (emprise ≤ e_fixe_m, frp ≤ f_fixe_mw) : ils
+    passent en `vegetation_confirme` et ne se promeuvent jamais en candidat. On les
+    déclare explicitement, en version (config/sources_fixes.toml).
+
+    Upsert idempotent, clé naturelle = `evidence_json.nom` (la table n'a pas de colonne
+    nom) : ré-importer ne duplique pas, ajuste centre/rayon/kind. Ne supprime jamais
+    (P1). Retourne {created, updated}. Un `rejeu` ensuite exclut l'historique déjà
+    clusterisé (le marquage ne traite que les hotspots libres).
+    """
+    created = updated = 0
+    for s in sources:
+        nom = s["nom"]
+        evidence = json.dumps({"nom": nom, "origine": "geofence"}, ensure_ascii=False)
+        existing = conn.execute(
+            "SELECT id FROM fixed_source WHERE json_extract(evidence_json, '$.nom')=?", (nom,)
+        ).fetchone()
+        row = (s["lat"], s["lon"], s["radius_m"], s.get("kind", "inconnu"), evidence, stamp)
+        if existing:
+            conn.execute(
+                "UPDATE fixed_source SET lat=?, lon=?, radius_m=?, kind=?, evidence_json=?, "
+                "status='confirme', last_review_at=? WHERE id=?",
+                (*row, existing["id"]),
+            )
+            updated += 1
+        else:
+            conn.execute(
+                "INSERT INTO fixed_source (lat, lon, radius_m, kind, evidence_json, "
+                "last_review_at, status, first_seen) VALUES (?, ?, ?, ?, ?, ?, 'confirme', ?)",
+                (*row, stamp),
+            )
+            created += 1
+    conn.commit()
+    return {"created": created, "updated": updated}
+
+
 def list_candidates(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """Sources fixes en attente de revue (pour le CLI)."""
     return conn.execute(

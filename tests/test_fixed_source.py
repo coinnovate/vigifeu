@@ -5,6 +5,7 @@ from __future__ import annotations
 from vigifeu.engine.cluster import cluster_new_hotspots
 from vigifeu.engine.fixed_source import (
     confirm_candidate,
+    import_fixed_sources,
     invalidate_candidate,
     list_candidates,
     mark_fixed_sources,
@@ -106,3 +107,51 @@ def test_marquage_sans_source_confirmee_noop(db):
     conn, config = db
     insert_hotspot(conn, *TORCHE, "2026-07-20T12:00:00Z")
     assert mark_fixed_sources(conn, config) == {"marked": 0}
+
+
+# --- Géofence des sources fixes connues (import direct en `confirme`) -------------
+
+DUNKERQUE = (51.0345, 2.2857)
+_ZONE = [{"nom": "Dunkerque — test", "lat": DUNKERQUE[0], "lon": DUNKERQUE[1],
+          "radius_m": 3000, "kind": "acierie"}]
+
+
+def test_import_geofence_cree_source_confirmee(db):
+    conn, _ = db
+    res = import_fixed_sources(conn, _ZONE, stamp=STAMP)
+    assert res == {"created": 1, "updated": 0}
+    src = conn.execute("SELECT status, kind, radius_m FROM fixed_source").fetchone()
+    assert src["status"] == "confirme" and src["kind"] == "acierie" and src["radius_m"] == 3000
+
+
+def test_import_geofence_idempotent(db):
+    """Ré-importer ne duplique pas (clé = nom) et ajuste le rayon."""
+    conn, _ = db
+    import_fixed_sources(conn, _ZONE, stamp=STAMP)
+    zone2 = [{**_ZONE[0], "radius_m": 3500}]
+    res = import_fixed_sources(conn, zone2, stamp=STAMP)
+    assert res == {"created": 0, "updated": 1}
+    rows = conn.execute("SELECT radius_m FROM fixed_source").fetchall()
+    assert len(rows) == 1 and rows[0]["radius_m"] == 3500
+
+
+def test_geofence_exclut_un_complexe_etendu_et_chaud(db):
+    """Le cas que R1 auto RATE : étendu (> e_fixe_m) et chaud (> f_fixe_mw).
+
+    Sans géofence il partirait en `vegetation_confirme` (voie feu franc). Déclaré
+    en source fixe, ses hotspots sont marqués et exclus : aucun feu ne se forme.
+    """
+    conn, config = db
+    lat, lon = DUNKERQUE
+    # Nappe de points chauds ~2 km d'emprise, FRP 30 MW, sur plusieurs passages/jours.
+    for jour in range(1, 4):
+        for dlat, dlon in [(0, 0), (0.01, 0.01), (-0.01, 0.01), (0.01, -0.01)]:
+            insert_hotspot(conn, lat + dlat, lon + dlon,
+                           f"2026-07-{jour:02d}T03:00:00Z", frp=30.0, overpass_id=jour)
+
+    import_fixed_sources(conn, _ZONE, stamp=STAMP)
+    assert mark_fixed_sources(conn, config)["marked"] == 12  # 4 points × 3 jours
+
+    res = cluster_new_hotspots(conn, config, stamp=STAMP)
+    assert res["created"] == 0
+    assert conn.execute("SELECT COUNT(*) AS n FROM fire_event").fetchone()["n"] == 0

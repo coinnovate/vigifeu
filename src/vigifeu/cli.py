@@ -11,6 +11,8 @@
   vigifeu rejeu                   — reconstruit toute l'interprétation depuis hotspot_raw (P2)
   vigifeu feux [N]                — derniers FireEvents (défaut : 30)
   vigifeu sources                 — sources fixes candidates en attente de revue
+  vigifeu sources-fixes-import [PATH]
+                                  — importe le géofence des sources fixes connues (défaut config/sources_fixes.toml)
   vigifeu confirmer ID [type]     — confirme une source fixe candidate
   vigifeu invalider ID            — rejette une source fixe candidate
   vigifeu communes-import PATH [--millesime M] [--layer L]
@@ -180,6 +182,28 @@ def cmd_sources() -> None:
     for r in rows:
         print(f"#{r['id']:<4} {r['lat']:.4f},{r['lon']:.4f} r={r['radius_m']:.0f}m "
               f"{r['evidence_json']}")
+
+
+def cmd_sources_fixes_import(path: str | None) -> None:
+    """Importe le géofence des sources fixes connues (config/sources_fixes.toml).
+
+    Upsert idempotent en `confirme` (clé = nom). Un `rejeu` ensuite reprend
+    l'historique déjà clusterisé (les feux formés ne se démarquent pas seuls).
+    """
+    import tomllib
+
+    from vigifeu.engine.fixed_source import import_fixed_sources
+
+    seed = path or "config/sources_fixes.toml"
+    with open(seed, "rb") as f:
+        sources = tomllib.load(f).get("source", [])
+    conn, _ = _open()
+    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    res = import_fixed_sources(conn, sources, stamp=stamp)
+    print(
+        f"sources fixes (géofence) : {res['created']} créées, {res['updated']} mises à jour "
+        f"({len(sources)} dans {seed}). Lancer `vigifeu rejeu` pour reprendre l'historique."
+    )
 
 
 def cmd_confirmer(source_id: int, kind: str | None) -> None:
@@ -362,6 +386,8 @@ def main() -> None:
             cmd_feux(int(rest[0]) if rest else 30)
         case "sources":
             cmd_sources()
+        case "sources-fixes-import":
+            cmd_sources_fixes_import(rest[0] if rest else None)
         case "confirmer":
             cmd_confirmer(int(rest[0]), rest[1] if len(rest) > 1 else None)
         case "invalider":
