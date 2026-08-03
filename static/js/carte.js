@@ -65,6 +65,11 @@
     }
     var frDate = function (iso) { var p = iso.split("-"); return p[2] + "/" + p[1] + "/" + p[0]; };
     var showNote = function (t) { if (note) { note.textContent = t; note.hidden = false; } };
+    // Sous l'imagerie, les cellules (emprise, opaques) masqueraient la cicatrice réelle :
+    // quand une image claire s'affiche, on ne garde que le contour (enveloppe) ; sinon elles restent.
+    var showCells = function (v) {
+      if (map.getLayer("cellules")) map.setLayoutProperty("cellules", "visibility", v ? "visible" : "none");
+    };
     var state = "idle";      // idle → loading → ready | none
     var legendText = "";
 
@@ -98,7 +103,7 @@
         if (best) {
           state = "ready";
           legendText = legendTpl.replace("{date}", frDate(best));
-          if (tImg.checked) { addImagery(best); showNote(legendText); }
+          if (tImg.checked) { addImagery(best); showNote(legendText); showCells(false); }
         } else {
           state = "none";
           if (tImg.checked) showNote(degrade);   // pas de vue claire post-feu → dégradé honnête
@@ -110,13 +115,16 @@
       if (!tImg.checked) {
         if (map.getLayer("imagerie")) map.setLayoutProperty("imagerie", "visibility", "none");
         if (note) note.hidden = true;
+        showCells(true);   // imagerie coupée → l'emprise redevient visible
         return;
       }
       if (state === "ready") {
         if (map.getLayer("imagerie")) map.setLayoutProperty("imagerie", "visibility", "visible");
         showNote(legendText);
+        showCells(false);
       } else if (state === "none") {
-        showNote(degrade);
+        showNote(degrade);   // pas d'image affichée → on garde l'emprise
+        showCells(true);
       } else if (state === "idle") {
         resolve();
       }  // "loading" : on attend la résolution en cours
