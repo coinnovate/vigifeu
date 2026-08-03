@@ -207,7 +207,10 @@
             32, 16,  // ~1000 ha
             71, 22   // ~5000 ha (mégafeu)
           ],
-          "circle-color": COULEUR.front_actif,
+          // Rouge = feu actif ; gris = plus détecté (silence, en attente d'archivage).
+          // La teinte est doublée par le badge de la liste (accessibilité, jamais la couleur seule).
+          "circle-color": ["match", ["get", "lifecycle"],
+            "plus_detecte", COULEUR.plus_detecte, COULEUR.front_actif],
           "circle-stroke-color": "#fff", "circle-stroke-width": 1.5, "circle-opacity": 0.9
         }
       });
