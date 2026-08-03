@@ -214,12 +214,21 @@
           "circle-stroke-color": "#fff", "circle-stroke-width": 1.5, "circle-opacity": 0.9
         }
       });
+      // Infobulle au survol : le nom du feu, pour ne pas cliquer en aveugle (même motif
+      // que les POI des fiches). setText → pas d'injection ; on ancre au point, pas au curseur.
+      var popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
       map.on("click", "feux", function (e) {
         var url = e.features[0].properties.url;
         if (url) window.location.href = url;
       });
-      map.on("mouseenter", "feux", function () { map.getCanvas().style.cursor = "pointer"; });
-      map.on("mouseleave", "feux", function () { map.getCanvas().style.cursor = ""; });
+      map.on("mouseenter", "feux", function (e) {
+        map.getCanvas().style.cursor = "pointer";
+        var f = e.features[0];
+        popup.setLngLat(f.geometry.coordinates.slice()).setText(f.properties.nom).addTo(map);
+      });
+      map.on("mouseleave", "feux", function () {
+        map.getCanvas().style.cursor = ""; popup.remove();
+      });
     });
   }
 
