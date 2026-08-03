@@ -19,9 +19,27 @@
 # vérifiées. N'ajouter Fos-sur-Mer, Le Havre/Gonfreville, Lacq, Berre… qu'avec des
 # coordonnées et un rayon confirmés (fond de carte / cadastre), pas au jugé.
 
+# Centre + rayon de chaque zone = mesurés sur les détections réelles en base (centroïde
+# des hotspots + distance au point le plus éloigné), pas estimés. Rayon posé un peu au-dessus
+# de l'emprise observée pour la marge.
+
 [[source]]
 nom = "Dunkerque — complexe portuaire et sidérurgique"
 lat = 51.0345          # centroïde des détections FIRMS (aciérie ArcelorMittal + port ouest)
 lon = 2.2857
 radius_m = 3000        # couvre l'emprise observée (~656 ha) sans mordre sur Dunkerque-centre (~6 km E)
 kind = "acierie"
+
+[[source]]
+nom = "Fos-sur-Mer — zone industrialo-portuaire (ArcelorMittal + raffineries)"
+lat = 43.4402          # centroïde des 547 hotspots du feu #11 ; emprise mesurée ~3671 m
+lon = 4.8900
+radius_m = 4000
+kind = "complexe_industriel"
+
+[[source]]
+nom = "Port-Jérôme-sur-Seine — raffinerie (Notre-Dame-de-Gravenchon)"
+lat = 49.4766          # centroïde du feu #25 ; emprise mesurée ~1203 m
+lon = 0.5363
+radius_m = 1500
+kind = "raffinerie"
