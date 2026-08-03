@@ -54,6 +54,32 @@ systemctl daemon-reload && systemctl enable --now vigifeu
 journalctl -u vigifeu -f                  # vérifier le premier cycle
 ```
 
+## Mise à jour (routine)
+
+Déploiement courant (code moteur, pipeline, données) — le daemon régénère seul
+les pages impactées au redémarrage, rien à générer à la main :
+
+```bash
+sudo /opt/vigifeu/deploy/update.sh        # pull + uv sync + restart
+```
+
+Après un changement de **gabarit** (`templates/`) ou de **lexique**
+(`src/vigifeu/lexique/`), la régénération incrémentale du daemon ne retouche PAS
+les pages déjà générées : il faut un **rebuild complet**, daemon arrêté (écrivain
+SQLite unique) et **lancé depuis `/opt/vigifeu`** — `params.toml` utilise des
+chemins relatifs (`config/…`, `templates/…`, `data/site`), sinon
+`PermissionError: … 'config/params.toml'` :
+
+```bash
+sudo /opt/vigifeu/deploy/update.sh
+sudo systemctl stop vigifeu
+sudo -u vigifeu bash -c 'cd /opt/vigifeu && .venv/bin/python -m vigifeu.cli rebuild'
+sudo systemctl start vigifeu
+```
+
+Un changement **CSS seul** ne nécessite pas de rebuild : `update.sh` suffit (le
+restart recopie les assets via `sync_static`).
+
 ## Principes non négociables (rappels)
 
 - **Un seul processus écrivain** SQLite (le daemon). Le CLI est sûr tant que le
