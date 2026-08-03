@@ -205,6 +205,13 @@ wave_min_history_fires = 3
 # détection est considérée re-téléchargée (backfill/récupération) et exclue — son ingested_at
 # tardif fausserait la médiane (la latence NRT ne se rejoue pas, P5).
 latence_nrt_max_h = 6
+# Chronologie des passages (fiche feu) : un feu long compte des dizaines de passages. Au-delà
+# de `chrono_repli_seuil` lignes, on garde les `chrono_repli_visible` passages les plus récents
+# visibles et on replie les plus anciens dans un <details> (même parti que les communes lointaines) —
+# la liste complète reste dans le HTML (crawlable) mais la page redevient scannable. Le pic
+# d'intensité, lui, est déjà porté par la synthèse, donc rien d'important n'est masqué.
+chrono_repli_seuil = 20
+chrono_repli_visible = 12
 
 [imagerie]
 # Spec 06 §5 — cran 2 : calque Sentinel-2 10 m (fausse-couleur SWIR « brûlure ») via CDSE

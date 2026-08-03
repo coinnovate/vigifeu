@@ -84,8 +84,11 @@ def test_synthese_citable(saumos_archive):
     assert 1 <= len(ctx["synthese"]) <= 6
     joined = " ".join(ctx["synthese"])
     assert "Feu suivi du 22/07/2026" in joined
-    # une phrase de progression vers le nord doit apparaître (front ~nord, §10.1)
-    assert "progressé d'environ" in joined and "nord" in joined
+    # Feu archivé (terminé) : pas d'info « live » — ni progression du front, ni direction du vent.
+    assert "progressé d'environ" not in joined
+    assert "souffle en direction" not in joined
+    # …mais le PIC d'intensité relevé sur toute la durée résume l'épisode (§2.2).
+    assert "maximale relevée" in joined
 
 
 def test_communes_groupees(saumos_archive):
@@ -98,6 +101,9 @@ def test_communes_groupees(saumos_archive):
     assert "Saumos" in noms
     # chaque item pointe vers une fiche commune
     assert all(i["href"].startswith("/communes/") for i in emprise["communes"])
+    # feu archivé : pas de bloc « live » — ni communes « direction du vent », ni section Météo.
+    assert "Dans la direction actuelle du vent" not in titres
+    assert ctx["meteo_obs"] is None
 
 
 def test_html_structure_et_sans_js(html):

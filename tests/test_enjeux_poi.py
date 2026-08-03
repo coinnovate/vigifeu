@@ -80,8 +80,9 @@ def test_loader_agrege_et_ignore_lointains_et_fermes(conn):
 
     phrases = _enjeux_poi(conn, 1)
     assert phrases == [
-        "Dans la zone détectée du feu : 2 campings et 1 établissement scolaire",
-        "À proximité (moins de 5 km) : 1 hôpital",
+        {"texte": "Dans la zone détectée du feu : 2 campings et 1 établissement scolaire",
+         "zone": True},
+        {"texte": "À proximité (moins de 5 km) : 1 hôpital", "zone": False},
     ]
 
 

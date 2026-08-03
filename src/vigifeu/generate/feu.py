@@ -100,10 +100,13 @@ def _enjeux_poi(conn, event_id):
     10/20 km ne sont pas surfacés (faible signal comme enjeu ; ils restent en base)."""
     tiers = _poi_tiers(conn, event_id)
     phrases = []
+    # `zone` = enjeux DANS la zone détectée (palier emprise) : mis en avant (gras) au rendu,
+    # c'est le signal le plus fort. « À proximité » reste en corps de texte normal.
     if tiers["emprise"]:
-        phrases.append(fr.phrase_enjeux_poi("emprise", tiers["emprise"]))
+        phrases.append({"texte": fr.phrase_enjeux_poi("emprise", tiers["emprise"]), "zone": True})
     if tiers["a_moins_de_5km"]:
-        phrases.append(fr.phrase_enjeux_poi("proximite", tiers["a_moins_de_5km"]))
+        phrases.append({"texte": fr.phrase_enjeux_poi("proximite", tiers["a_moins_de_5km"]),
+                        "zone": False})
     return phrases
 
 
@@ -268,36 +271,55 @@ def _synthese(conn, config, fire, latest, relations):
     if latest and latest["area_ha_estimee"]:
         phrases.append(fr.phrase_emprise_estimee(latest["area_ha_estimee"]) + ".")
 
-    prog = _latest_progression(conn, fire["id"])
-    if prog:
-        phrases.append(
-            fr.phrase_progression(prog["km"], prog["bearing"],
-                                  passage_a=prog["a"], passage_b=prog["b"]) + "."
-        )
+    actif = lifecycle == "actif"
+
+    # Progression du front : information « live » (où va le feu) — sans objet une fois le
+    # feu terminé, où le dernier passage ne trace plus qu'un résidu. On la réserve à l'actif.
+    if actif:
+        prog = _latest_progression(conn, fire["id"])
+        if prog:
+            phrases.append(
+                fr.phrase_progression(prog["km"], prog["bearing"],
+                                      passage_a=prog["a"], passage_b=prog["b"]) + "."
+            )
 
     series = version.intensity_series(conn, fire["id"], config)
     if series:
-        dernier = series[-1]
-        if dernier["frp"]:
-            phrases.append(
-                fr.phrase_frp(dernier["frp"], type_passage=_DN.get(dernier["dn"], "jour"),
-                              date=dernier["at"]) + "."
-            )
+        if actif:
+            # feu en cours : intensité au dernier passage (l'état présent).
+            dernier = series[-1]
+            if dernier["frp"]:
+                phrases.append(
+                    fr.phrase_frp(dernier["frp"], type_passage=_DN.get(dernier["dn"], "jour"),
+                                  date=dernier["at"]) + "."
+                )
+        else:
+            # feu terminé : le dernier passage est un résidu ; on résume par le PIC de
+            # puissance relevé sur toute la durée (le chiffre marquant de l'épisode).
+            pic = max(series, key=lambda s: s["frp"] or 0)
+            if pic["frp"]:
+                phrases.append(
+                    fr.phrase_frp_max(pic["frp"], type_passage=_DN.get(pic["dn"], "jour"),
+                                      date=pic["at"]) + "."
+                )
 
-    wobs = _latest_weather(conn, fire["id"])
-    if wobs and wobs["wind_dir_deg"] is not None:
-        phrases.append(
-            fr.phrase_vent(wobs["wind_dir_deg"], wobs["wind_speed_kmh"] or 0,
-                           wobs["wind_gusts_kmh"] or 0, provider=wobs["provider"] or "météo",
-                           heure=wobs["observed_at"]) + "."
-        )
-        aval = [r["nom"] for r in relations
-                if r["rel_type"] == "direction_vent" and r["valid_to"] is None]
-        if aval:
+    # Vent : direction de propagation « live » (vers quelles communes le feu se dirige) —
+    # sans objet pour un feu terminé. Réservé à l'actif (la section Météo reste, elle, factuelle).
+    if actif:
+        wobs = _latest_weather(conn, fire["id"])
+        if wobs and wobs["wind_dir_deg"] is not None:
             phrases.append(
-                fr.phrase_vent_communes(wobs["wind_dir_deg"], aval,
-                                        heure=wobs["observed_at"]) + "."
+                fr.phrase_vent(wobs["wind_dir_deg"], wobs["wind_speed_kmh"] or 0,
+                               wobs["wind_gusts_kmh"] or 0, provider=wobs["provider"] or "météo",
+                               heure=wobs["observed_at"]) + "."
             )
+            aval = [r["nom"] for r in relations
+                    if r["rel_type"] == "direction_vent" and r["valid_to"] is None]
+            if aval:
+                phrases.append(
+                    fr.phrase_vent_communes(wobs["wind_dir_deg"], aval,
+                                            heure=wobs["observed_at"]) + "."
+                )
     return phrases
 
 
@@ -317,6 +339,17 @@ def _chronologie(conn, config, event_id):
     } for s in series]
     lignes.reverse()   # antichronologique
     return lignes
+
+
+def _chronologie_ctx(conn, config, event_id) -> dict:
+    """Chronologie + le seuil de repli (Spec 04, décision Lot 4 : liste longue → <details>).
+
+    `chrono_repli` = nombre de passages récents laissés visibles quand la liste dépasse
+    `chrono_repli_seuil` (les plus anciens sont repliés) ; None si la liste est courte."""
+    lignes = _chronologie(conn, config, event_id)
+    gen = config["generate"]
+    repli = gen["chrono_repli_visible"] if len(lignes) > gen["chrono_repli_seuil"] else None
+    return {"chronologie": lignes, "chrono_repli": repli}
 
 
 def _imagerie_ctx(config: dict, fire) -> dict:
@@ -356,6 +389,10 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
 
     synthese = _synthese(conn, config, fire, latest, relations)
     wobs = _latest_weather(conn, event_id)
+    # Un feu terminé n'a plus d'état « live » : ni conditions au foyer (section Météo), ni
+    # communes « dans la direction du vent » — la propagation a cessé. On neutralise ces blocs
+    # (même parti que la progression/vent dans _synthese). Le contexte sécheresse, lui, reste.
+    actif = fire["lifecycle"] == "actif"
 
     # Bandeau d'indicateurs (résumé visuel en tête, cf. indicateurs.py).
     danger_foret = None
@@ -422,7 +459,9 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
         # avec mostRecent). **imagerie_from gate tout le bloc dans le gabarit.**
         **_imagerie_ctx(config, fire),
         "synthese": synthese,
-        "communes_groupes": _groupes_communes(relations, _REL_PRINCIPAUX),
+        "communes_groupes": _groupes_communes(
+            relations,
+            _REL_PRINCIPAUX if actif else [r for r in _REL_PRINCIPAUX if r != "direction_vent"]),
         "communes_groupes_eloignes": _groupes_communes(relations, _REL_ELOIGNES),
         # Enjeux POI (Spec 06 §4) : agrégé, jamais nominatif ; section absente tant qu'aucun
         # référentiel POI n'est chargé (dégradé, pas d'affirmation d'absence — P6).
@@ -430,7 +469,10 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
         "enjeux_poi_legende": _enjeux_poi_legende(conn, event_id),
         "enjeux_indispo": not _poi_referentiel_charge(conn),
         "enjeux_reserve": fr.note_enjeux_poi(),
-        "chronologie": _chronologie(conn, config, event_id),
+        # Chronologie : liste complète (crawlable) ; `chrono_repli` = nb de passages récents
+        # laissés visibles quand la liste dépasse le seuil (les plus anciens sont repliés), None
+        # sinon. Le pic d'intensité étant déjà dans la synthèse, rien d'important n'est masqué.
+        **_chronologie_ctx(conn, config, event_id),
         # Contexte sécheresse : danger Météo des forêts du département (armé) ; dégradé
         # tant que [drought].activated est faux (Spec 03 P6 : l'absence est une info, pas
         # un trou silencieux) ; « rien à signaler » si armé mais sans donnée.
@@ -441,7 +483,7 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
                           dir_origine_deg=wobs["wind_dir_deg"], v_kmh=wobs["wind_speed_kmh"],
                           rafales_kmh=wobs["wind_gusts_kmh"], precip_1h=wobs["precip_mm_1h"],
                           provider=wobs["provider"] or "météo", heure=wobs["observed_at"])
-                      if wobs else None),
+                      if wobs and actif else None),
         "brut": {
             "n_hotspots": _hotspot_count(conn, event_id),
             "n_versions": len(_versions(conn, event_id)),

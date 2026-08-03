@@ -113,7 +113,7 @@
 <h2>Enjeux sensibles à proximité</h2>
 {% if enjeux_poi %}
 {% for p in enjeux_poi %}
-<p>{{ p }}.</p>
+<p{% if p.zone %} class="en-zone"{% endif %}>{{ p.texte }}.</p>
 {% endfor %}
 {% else %}
 <p class="calme">Aucun établissement sensible recensé à proximité.</p>
@@ -125,15 +125,32 @@
 {% if chronologie %}
 <section class="chronologie">
 <h2>Chronologie des passages</h2>
-<table>
-<thead><tr><th>Heure (donnée)</th><th>Passage</th><th>Points chauds</th><th>Puissance thermique</th></tr></thead>
-<tbody>
-{% for l in chronologie %}
+{% macro lignes_chrono(lignes) %}
+{% for l in lignes %}
 <tr><td>{{ l.at }}</td><td>{{ l.type }}</td><td>{{ l.n_hotspots }}</td>
 <td>{% if l.frp %}{{ l.frp }} MW{% else %}—{% endif %}</td></tr>
 {% endfor %}
+{% endmacro %}
+{% set entetes %}<thead><tr><th>Heure (donnée)</th><th>Passage</th><th>Points chauds</th><th>Puissance thermique</th></tr></thead>{% endset %}
+{# Liste longue (Lot 4) : on garde les `chrono_repli` passages récents visibles et on replie
+   les plus anciens dans un <details>. La liste complète reste dans le HTML (crawlable). #}
+<table>
+{{ entetes }}
+<tbody>
+{{ lignes_chrono(chronologie[:chrono_repli] if chrono_repli else chronologie) }}
 </tbody>
 </table>
+{% if chrono_repli %}
+<details class="chrono-anciens">
+<summary>Voir les {{ chronologie|length - chrono_repli }} passages plus anciens</summary>
+<table>
+{{ entetes }}
+<tbody>
+{{ lignes_chrono(chronologie[chrono_repli:]) }}
+</tbody>
+</table>
+</details>
+{% endif %}
 <p class="note">Les passages de nuit et de jour ne sont pas comparables entre eux (sensibilité du capteur).</p>
 </section>
 {% endif %}

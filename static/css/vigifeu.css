@@ -88,6 +88,12 @@ h2 { font-size: 1.15rem; margin: 1.6rem 0 .5rem; color: var(--marine); border-bo
 .synthese p { margin: .5rem 0; }
 .synthese { font-size: 1.05rem; }
 
+/* Réserve / petit texte de prudence (enjeux, recensement, non-comparabilité jour/nuit) :
+   plus petit, en italique et grisé — c'est un caveat, pas le propos. */
+.note { font-size: .85rem; font-style: italic; color: var(--gris); margin: .4rem 0; }
+/* Enjeux DANS la zone détectée : signal le plus fort → mis en avant en gras. */
+.enjeux .en-zone { font-weight: 700; }
+
 table { border-collapse: collapse; width: 100%; font-size: .9rem; margin: .5rem 0; display: block; overflow-x: auto; }
 th, td { text-align: left; padding: .35rem .6rem; border-bottom: 1px solid var(--trait); white-space: nowrap; }
 

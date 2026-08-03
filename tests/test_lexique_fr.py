@@ -134,6 +134,15 @@ def test_phrase_frp_et_comparee():
     assert "au passage de nuit du 25/07/2026" in p
 
 
+def test_phrase_frp_max():
+    # Résumé d'un feu terminé : le pic relevé, daté par son passage, sans comparaison.
+    assert (
+        fr.phrase_frp_max(19695, type_passage="jour", date="2026-07-24T14:57:00Z")
+        == "Puissance thermique (FRP) maximale relevée : 19 695 mégawatts "
+           "au passage de jour du 24/07/2026"
+    )
+
+
 def test_phrase_frp_garde_jour_nuit():
     with pytest.raises(ValueError):
         fr.phrase_frp_comparee(100, 200, type_courant="jour", type_precedent="nuit",

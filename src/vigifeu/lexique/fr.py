@@ -312,6 +312,18 @@ def phrase_frp(frp: float, *, type_passage: str, date: str) -> str:
     )
 
 
+def phrase_frp_max(frp: float, *, type_passage: str, date: str) -> str:
+    """Pic de puissance thermique (FRP) sur toute la durée du feu (Spec 03 §2.2).
+
+    Résumé a posteriori d'un feu terminé : la mesure la plus forte relevée, datée par le
+    passage où elle l'a été. Pas une comparaison jour↔nuit (garde-fou Spec 02 §6) — une
+    valeur unique, pas un rapport ; le type de passage est cité pour la traçabilité."""
+    return (
+        f"Puissance thermique (FRP) maximale relevée : {nombre_fr(frp)} mégawatts "
+        f"au passage de {type_passage} du {date_fr(date)}"
+    )
+
+
 def phrase_frp_comparee(
     frp: float, frp_precedent: float, *,
     type_courant: str, type_precedent: str, date: str,
