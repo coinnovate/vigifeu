@@ -146,10 +146,17 @@
           "fill-opacity": 0.55
         }
       });
+      // Contour de l'emprise, lisible sur fond clair ET sur imagerie sombre : halo blanc
+      // (trait plein large, dessous) + tiretés foncés (au-dessus).
+      map.addLayer({
+        id: "enveloppe-halo", type: "line", source: "feu",
+        filter: ["==", ["get", "couche"], "enveloppe"],
+        paint: { "line-color": "#ffffff", "line-width": 4, "line-opacity": 0.85 }
+      });
       map.addLayer({
         id: "enveloppe", type: "line", source: "feu",
         filter: ["==", ["get", "couche"], "enveloppe"],
-        paint: { "line-color": "#333", "line-dasharray": [2, 2], "line-width": 1.5 }
+        paint: { "line-color": "#1a1a1a", "line-dasharray": [2, 2], "line-width": 2 }
       });
       // Enjeux (POI) : marqueurs par catégorie, bord foncé si DANS la zone détectée.
       // Non cliquables (infobulle seule) — Spec 06 §4.
