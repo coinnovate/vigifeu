@@ -7,6 +7,7 @@ lexique bien assemblées, et **aucun terme interdit** (préfiguration du lint §
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -54,6 +55,31 @@ def saumos_archive():
     ).fetchone()["fire_event_id"]
     ensure_public_id(conn, saumos_id)
     conn.execute("UPDATE fire_event SET lifecycle='archive' WHERE id=?", (saumos_id,))
+    # Un bulletin de veille presse (Spec 09) pour la fiche de référence. Contient volontairement
+    # « hors de contrôle » (statut du feu) et « menacées » (libellé) — termes INTERDITS au lexique
+    # Vigifeu mais légitimes dans une CITATION presse attribuée : ils prouvent l'exemption de lint.
+    conn.execute(
+        "INSERT INTO bulletin (fire_event_id, date_bulletin, mots_cles, resume, indicateurs_json, "
+        "sources_json, articles_valides, fournisseurs_ia, provider, acq_at, ingested_at) "
+        "VALUES (?, '2026-07-25', 'incendie Saumos', ?, ?, ?, 6, ?, 'co-innovate', ?, ?)",
+        (
+            saumos_id,
+            "Le feu de Saumos a débuté le 22 juillet 2026 et a mobilisé au moins 1 750 pompiers. "
+            "Plus de 34 000 hectares ont été brûlés.",
+            json.dumps([
+                {"indicateur": "surface brûlée", "valeur": "≥ 34000 ha", "statut": "confirmé"},
+                {"indicateur": "habitations menacées ou détruites", "valeur": "12 bâtiments",
+                 "statut": "environ"},
+                {"indicateur": "statut du feu", "valeur": "hors de contrôle", "statut": "confirmé"},
+            ], ensure_ascii=False),
+            json.dumps([
+                {"url": "https://www.sudouest.fr/gironde/a", "hote": "sudouest.fr"},
+                {"url": "https://france3-regions.franceinfo.fr/b", "hote": "france3-regions.franceinfo.fr"},
+            ], ensure_ascii=False),
+            json.dumps({"resume": "mistral"}, ensure_ascii=False),
+            "2026-07-25T13:00:00Z", "2026-07-25T13:00:00Z",
+        ),
+    )
     conn.commit()
     yield conn, config, saumos_id
     conn.close()
@@ -124,14 +150,48 @@ def test_html_structure_et_sans_js(html):
 
 
 def test_lint_lexique_aucun_terme_interdit(html):
-    """Préfiguration du garde-fou §9.1 : aucun terme proscrit dans le HTML généré."""
+    """Garde-fou §9.1 : aucun terme proscrit dans le HTML généré — hors section presse
+    (lignée `declaree` attribuée, exemptée : Spec 09 §0/§10)."""
+    from vigifeu.generate.lint import texte_scannable
     _, page = html
-    bas = page.lower()
+    bas = texte_scannable(page).lower()
     for terme in fr.TERMES_INTERDITS:
         assert terme.lower() not in bas, f"terme interdit dans le HTML : {terme!r}"
     # quelques pièges opérationnels explicites
     for piege in ("éteint", "maîtrisé", "sera touché", "propagation estimée"):
         assert piege not in bas
+
+
+def test_bulletins_section(html):
+    """La section bulletins s'affiche avec date, résumé, sources par hôte (nofollow) et badge."""
+    ctx, page = html
+    assert len(ctx["bulletins"]) == 1
+    b = ctx["bulletins"][0]
+    assert b["date"] == "25/07/2026"
+    assert "1 750 pompiers" in b["resume"]
+    assert {s["hote"] for s in b["sources"]} == {"sudouest.fr", "france3-regions.franceinfo.fr"}
+    assert "Bulletins de veille presse" in page
+    assert "Veille presse — à vérifier" in page
+    assert 'rel="nofollow noopener"' in page
+    assert ">sudouest.fr</a>" in page
+
+
+def test_bulletins_exemptes_du_lint(html):
+    """Un terme interdit CITÉ dans un bulletin est présent dans la page brute mais retiré du
+    scan lexique (exemption de la lignée presse attribuée — Spec 09 §0/§10)."""
+    from vigifeu.generate.lint import texte_scannable
+    _, page = html
+    assert "hors de contrôle" in page.lower()                        # présent, attribué presse
+    assert "hors de contrôle" not in texte_scannable(page).lower()   # mais hors du scan
+
+
+def test_bulletins_absents_si_aucun(saumos_archive):
+    """Sans bulletin : section absente (dégradé honnête, pas d'affirmation de vide)."""
+    conn, config, saumos_id = saumos_archive
+    ctx = load_fire_context(conn, config, saumos_id)
+    ctx["bulletins"], ctx["bulletins_repli"] = [], None
+    page = render_feu(make_env(config["generate"]["templates_dir"]), ctx)
+    assert "Bulletins de veille presse" not in page
 
 
 def test_aucun_horodatage_de_generation(html):

@@ -121,6 +121,48 @@
 <p class="note">{{ enjeux_reserve }}</p>
 </section>
 {% endif %}
+{# Bulletins de veille presse (Spec 09) — lignée `declaree`, distincte du satellite.
+   Contenu tiers → échappé par autoescape ; sources en nofollow. Section absente sans bulletin.
+   EXEMPTÉE du lint lexique (elle cite la presse, pas une affirmation Vigifeu — §0/§10). #}
+{% if bulletins %}
+<section class="bulletins">
+<h2>Bulletins de veille presse</h2>
+<p class="note lignee-presse">{{ bulletins_reserve }}</p>
+{% macro carte_bulletin(b) %}
+<article class="bulletin">
+<div class="bulletin-tete">
+<span class="badge presse">{{ b.badge }}</span>
+<time datetime="{{ b.date_iso }}">{{ b.date }}</time>
+</div>
+{% if b.resume %}<p class="resume">{{ b.resume }}</p>{% endif %}
+{% if b.indicateurs %}
+<details class="indic-presse">
+<summary>Détail chiffré (selon la presse)</summary>
+<ul>
+{% for i in b.indicateurs %}<li>{{ i.label }} : {{ i.valeur }}{% if i.environ %} (environ){% endif %}</li>
+{% endfor %}
+</ul>
+</details>
+{% endif %}
+{% if b.sources %}
+<p class="sources">Sources ({{ b.sources|length }}) : {% for s in b.sources %}<a href="{{ s.url }}" rel="nofollow noopener" target="_blank">{{ s.hote }}</a>{{ ", " if not loop.last }}{% endfor %}</p>
+{% endif %}
+</article>
+{% endmacro %}
+{% for b in (bulletins[:bulletins_repli] if bulletins_repli else bulletins) %}
+{{ carte_bulletin(b) }}
+{% endfor %}
+{% if bulletins_repli %}
+<details class="bulletins-anciens">
+<summary>Voir les {{ bulletins|length - bulletins_repli }} bulletins plus anciens</summary>
+{% for b in bulletins[bulletins_repli:] %}
+{{ carte_bulletin(b) }}
+{% endfor %}
+</details>
+{% endif %}
+</section>
+{% endif %}
+
 {# 3.5 Chronologie + 3.6 intensité par passage — antichronologique, jour/nuit distingués #}
 {% if chronologie %}
 <section class="chronologie">

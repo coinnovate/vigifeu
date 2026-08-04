@@ -471,6 +471,28 @@ def note_enjeux_poi() -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Bulletins de veille presse (Spec 09) — lignée `declaree`, distincte du satellite #
+# --------------------------------------------------------------------------- #
+
+def bulletin_badge() -> str:
+    """Étiquette d'un bulletin : rappelle la lignée presse et l'exigence de vérification."""
+    return "Veille presse — à vérifier"
+
+
+def note_bulletins() -> str:
+    """Réserve en tête de la section bulletins (Spec 09 §0/§5) : lignée presse, pas satellite."""
+    return ("Synthèse d'articles de presse consolidée automatiquement. "
+            "Ne reflète pas une observation satellite — la situation a pu évoluer.")
+
+
+def date_bulletin_fr(ymd: str) -> str:
+    """« 25/07/2026 » depuis une date locale `YYYY-MM-DD` (date_bulletin, déjà en heure de Paris,
+    pas de conversion de fuseau — ce n'est pas un instant mais un jour de veille)."""
+    annee, mois, jour = ymd.split("-")
+    return f"{jour}/{mois}/{annee}"
+
+
+# --------------------------------------------------------------------------- #
 # 2.4 — Prévisions météorologiques (catégorie `prevue`)                       #
 # --------------------------------------------------------------------------- #
 

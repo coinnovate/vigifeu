@@ -212,6 +212,11 @@ latence_nrt_max_h = 6
 # d'intensité, lui, est déjà porté par la synthèse, donc rien d'important n'est masqué.
 chrono_repli_seuil = 20
 chrono_repli_visible = 12
+# Timeline des bulletins de veille presse (Spec 09 §5) : au-delà de `bulletins_repli_seuil`
+# entrées, on garde les `bulletins_repli_visible` plus récentes visibles et on replie les plus
+# anciennes dans un <details> (même parti que la chronologie). Un feu produit ~1 bulletin/jour.
+bulletins_repli_seuil = 8
+bulletins_repli_visible = 6
 
 [imagerie]
 # Spec 06 §5 — cran 2 : calque Sentinel-2 10 m (fausse-couleur SWIR « brûlure ») via CDSE

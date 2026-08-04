@@ -8,6 +8,7 @@ La page est une fonction pure de la base (Spec 04 P1) → golden file possible (
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime, timedelta
 
@@ -379,6 +380,39 @@ def _imagerie_ctx(config: dict, fire) -> dict:
     }
 
 
+def _bulletins_ctx(conn, config, event_id):
+    """Bulletins de veille presse du feu (Spec 09 §5), timeline antichronologique.
+
+    Lignée `declaree`, distincte du satellite : chaque entrée = date + résumé + indicateurs
+    (confirmé/environ) + sources par hôte. Section absente si aucun bulletin (dégradé honnête).
+    `bulletins_repli` = nb d'entrées récentes laissées visibles quand la liste dépasse le seuil
+    (les plus anciennes repliées), None sinon — même parti que la chronologie."""
+    rows = conn.execute(
+        "SELECT date_bulletin, resume, indicateurs_json, sources_json "
+        "FROM bulletin WHERE fire_event_id=? ORDER BY date_bulletin DESC, id DESC",
+        (event_id,),
+    ).fetchall()
+    bulletins = []
+    for r in rows:
+        indicateurs = json.loads(r["indicateurs_json"]) if r["indicateurs_json"] else []
+        sources = json.loads(r["sources_json"]) if r["sources_json"] else []
+        bulletins.append({
+            "date": fr.date_bulletin_fr(r["date_bulletin"]),
+            "date_iso": r["date_bulletin"],
+            "badge": fr.bulletin_badge(),
+            "resume": r["resume"] or "",
+            "indicateurs": [
+                {"label": i["indicateur"], "valeur": i["valeur"],
+                 "environ": i.get("statut") == "environ"}
+                for i in indicateurs
+            ],
+            "sources": sources,  # [{url, hote}] déjà validées/dédupliquées (ingest)
+        })
+    g = config["generate"]
+    repli = g["bulletins_repli_visible"] if len(bulletins) > g["bulletins_repli_seuil"] else None
+    return {"bulletins": bulletins, "bulletins_repli": repli, "bulletins_reserve": fr.note_bulletins()}
+
+
 def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> dict:
     fire = _fire_row(conn, event_id)
     relations = _relations(conn, event_id)
@@ -469,6 +503,9 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
         "enjeux_poi_legende": _enjeux_poi_legende(conn, event_id),
         "enjeux_indispo": not _poi_referentiel_charge(conn),
         "enjeux_reserve": fr.note_enjeux_poi(),
+        # Bulletins de veille presse (Spec 09) : lignée `declaree` attribuée, section absente
+        # sans bulletin. Exemptée du lint lexique (elle cite la presse, §0/§10).
+        **_bulletins_ctx(conn, config, event_id),
         # Chronologie : liste complète (crawlable) ; `chrono_repli` = nb de passages récents
         # laissés visibles quand la liste dépasse le seuil (les plus anciens sont repliés), None
         # sinon. Le pic d'intensité étant déjà dans la synthèse, rien d'important n'est masqué.

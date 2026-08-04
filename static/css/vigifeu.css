@@ -94,6 +94,20 @@ h2 { font-size: 1.15rem; margin: 1.6rem 0 .5rem; color: var(--marine); border-bo
 /* Enjeux DANS la zone détectée : signal le plus fort → mis en avant en gras. */
 .enjeux .en-zone { font-weight: 700; }
 
+/* Bulletins de veille presse (Spec 09) — lignée `declaree`, distincte du satellite :
+   fond gris neutre + bordure gauche calme (marine, pas d'alarme : on est une veille). */
+.bulletins { margin: 1.4rem 0; }
+.bulletin { background: var(--fond-doux); border: 1px solid var(--trait); border-left: 4px solid var(--marine-clair); border-radius: .3rem; padding: .7rem .9rem; margin: .7rem 0; }
+.bulletin-tete { display: flex; align-items: center; justify-content: space-between; gap: .6rem; margin-bottom: .35rem; }
+.bulletin-tete time { font-size: .82rem; color: var(--gris); white-space: nowrap; }
+.badge.presse { background: var(--papier); border: 1px solid var(--marine-clair); color: var(--marine-clair); }
+.bulletin .resume { margin: .3rem 0; }
+.bulletin .indic-presse { margin: .4rem 0; }
+.bulletin .indic-presse summary { cursor: pointer; color: var(--gris); font-size: .9rem; }
+.bulletin .indic-presse ul { margin: .35rem 0 0; }
+.bulletin .sources { font-size: .82rem; color: var(--gris); margin: .35rem 0 0; }
+.bulletins-anciens > summary { cursor: pointer; color: var(--marine); margin: .5rem 0; }
+
 table { border-collapse: collapse; width: 100%; font-size: .9rem; margin: .5rem 0; display: block; overflow-x: auto; }
 th, td { text-align: left; padding: .35rem .6rem; border-bottom: 1px solid var(--trait); white-space: nowrap; }
 
