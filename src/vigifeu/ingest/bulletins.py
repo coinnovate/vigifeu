@@ -18,6 +18,7 @@ Spec 09 §10 (faits seulement, liens pas extraits, comptes pas de noms, pas de p
 
 from __future__ import annotations
 
+import sqlite3
 import time
 from urllib.parse import urlparse
 
@@ -28,6 +29,8 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
+from vigifeu.generate.publish import origin_commune
 
 # Seuls ces statuts d'indicateur portent une valeur exploitable (Spec 09 §1). `inconnu` =
 # non confirmé, champ vide → écarté (« champs vides = honnêtes » du guide d'intégration).
@@ -114,6 +117,39 @@ def est_vide(parsed: dict) -> bool:
     """Bulletin sans matière : pas de résumé ET aucun indicateur retenu. Le job ne crée
     alors pas de ligne `bulletin` (Spec 09 §2), il consigne l'absence dans ingestion_run."""
     return not parsed["resume"] and not parsed["indicateurs"]
+
+
+# --------------------------------------------------------------------------- #
+# Mot-clé du feu (commune principale) — Spec 09 §3                             #
+# --------------------------------------------------------------------------- #
+
+def commune_principale(conn: sqlite3.Connection, event_id: int) -> sqlite3.Row | None:
+    """Commune principale d'un feu pour le mot-clé presse (Spec 09 §3).
+
+    Réutilise `publish.origin_commune` (commune d'origine = première détection ; même notion
+    que le titre et le public_id du feu). À défaut d'emprise, la commune de proximité courante
+    la plus proche. None si aucune commune fiable (→ pas d'appel). Retourne une ligne avec au
+    moins `nom`, `code_insee`, `slug`.
+    """
+    c = origin_commune(conn, event_id)
+    if c is not None:
+        return c
+    return conn.execute(
+        "SELECT c.code_insee, c.slug, c.nom FROM fe_commune_rel r "
+        "JOIN commune c ON c.code_insee = r.code_insee "
+        "WHERE r.fire_event_id=? AND r.rel_type LIKE 'a_moins_de_%' AND r.valid_to IS NULL "
+        "ORDER BY r.distance_km, c.code_insee LIMIT 1",
+        (event_id,),
+    ).fetchone()
+
+
+def mots_cles_pour_feu(conn: sqlite3.Connection, config: dict, event_id: int) -> str | None:
+    """« {prefixe} {commune} » (Spec 09 §3), ex. « incendie Saumos ». None si aucune commune
+    fiable → le job n'appelle pas l'API pour ce feu (consigné, pas d'erreur)."""
+    c = commune_principale(conn, event_id)
+    if c is None:
+        return None
+    return f"{config['bulletins']['mot_cle_prefixe']} {c['nom']}"
 
 
 # --------------------------------------------------------------------------- #

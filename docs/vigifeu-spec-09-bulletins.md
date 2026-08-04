@@ -105,12 +105,15 @@ scalaire/texte, aucune géométrie).
 
 Décision (2026-08-04) : `mots_cles = "incendie " + nom_commune` (repli `"feu " + nom_commune` — cf. §9).
 
-**Commune principale** d'un feu, dans l'ordre :
+**Commune principale** d'un feu — on **réutilise la notion existante du projet**, pas un nouveau critère :
 
-1. la commune `rel_type = emprise_dans_commune` de **plus grande intersection** avec l'emprise (celle qui
-   porte le plus de surface détectée) — même source que le titre de fiche / le slug du `public_id` ;
-2. à défaut d'emprise (feu tout juste détecté, seulement des relations de proximité), la commune
-   `a_moins_de_5km` la **plus proche** (`distance_km` min) ;
+1. `publish.origin_commune(conn, event_id)` : la **commune d'origine** (celle qui contient la **première
+   détection** ; repli déterministe = emprise ouverte le plus tôt puis plus petit code INSEE). C'est déjà la
+   base du **titre du feu** (« Feu de {lieu} ») et du **slug du `public_id`** → le mot-clé colle au nom
+   affiché. *(Décision 2026-08-04, dévie du texte initial « plus grande intersection » : la surface
+   d'intersection n'est pas stockée, et `origin_commune` est la source de vérité canonique du lieu.)*
+2. à défaut d'emprise (feu tout juste détecté, seulement des relations de proximité), la commune de
+   **proximité la plus proche** (`rel_type LIKE 'a_moins_de_%'` courante, `distance_km` min) ;
 3. à défaut, **pas de mot-clé fiable → pas d'appel** (consigné, pas d'erreur).
 
 Le `nom` vient de la table `commune` (Spec 01 §5.2). On envoie un **seul** mot-clé ; l'indicateur de sortie
