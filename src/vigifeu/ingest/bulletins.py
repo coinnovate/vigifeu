@@ -18,9 +18,14 @@ Spec 09 §10 (faits seulement, liens pas extraits, comptes pas de noms, pas de p
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FuturesTimeout
+from datetime import UTC, datetime
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 import httpx
 from tenacity import (
@@ -30,7 +35,12 @@ from tenacity import (
     wait_exponential,
 )
 
+from vigifeu.engine.regen import enqueue
 from vigifeu.generate.publish import origin_commune
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 # Seuls ces statuts d'indicateur portent une valeur exploitable (Spec 09 §1). `inconnu` =
 # non confirmé, champ vide → écarté (« champs vides = honnêtes » du guide d'intégration).
@@ -213,3 +223,164 @@ def fetch_bulletin(mots_cles: str, date_jour: str, config: dict) -> dict:
     body = build_request(mots_cles, date_jour, config)
     id_tache = _post_recherche(base_url, body, config)
     return parse_resultat(_poll_resultat(base_url, id_tache, config))
+
+
+# --------------------------------------------------------------------------- #
+# Orchestration du cycle quotidien — Spec 09 §4                                #
+# --------------------------------------------------------------------------- #
+
+def _dates(config: dict, clock: datetime | None) -> tuple[str, str]:
+    """(date_bulletin `YYYY-MM-DD`, date_jour `JJ/MM/AAAA`) en heure locale (Europe/Paris)."""
+    tz = ZoneInfo(config["bulletins"]["timezone"])
+    local = (clock or datetime.now(UTC)).astimezone(tz)
+    return local.strftime("%Y-%m-%d"), local.strftime("%d/%m/%Y")
+
+
+def _feux_actifs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Feux actifs végétation, du plus fort FRP au plus faible (priorité sous quota)."""
+    return conn.execute(
+        "SELECT fe.id, "
+        "  (SELECT v.frp_total_last_pass_mw FROM fire_event_version v "
+        "   WHERE v.fire_event_id=fe.id ORDER BY v.version_n DESC LIMIT 1) AS frp "
+        "FROM fire_event fe "
+        "WHERE fe.lifecycle='actif' AND fe.qualification='vegetation_confirme' "
+        "ORDER BY frp DESC, fe.id"  # SQLite : NULL trié en dernier en DESC
+    ).fetchall()
+
+
+def _appel(mots_cles: str, date_jour: str, config: dict) -> tuple[str, object]:
+    """Exécuté dans un thread : RÉSEAU SEUL (jamais la connexion SQLite). ('ok', parsed)
+    ou ('error', message). Ne lève pas — l'écriture reste sérielle côté worker."""
+    try:
+        return ("ok", fetch_bulletin(mots_cles, date_jour, config))
+    except Exception as exc:  # noqa: BLE001 — BulletinError ou réseau inattendu, journalisé
+        return ("error", f"{type(exc).__name__}: {exc}")
+
+
+def generer_bulletins(conn: sqlite3.Connection, config: dict, *, clock: datetime | None = None) -> dict:
+    """Cycle quotidien (Spec 09 §4). Sélectionne les feux actifs, appelle l'API en fan-out
+    concurrent (réseau seul), écrit en SÉRIE (écrivain SQLite unique préservé), consigne tout
+    dans ingestion_run, enfile la regen des feux touchés. NE LÈVE JAMAIS (dégradé, Spec 02 §9).
+
+    Retourne un dict de stats. `clock` (datetime UTC) injectable pour les tests.
+    """
+    b = config["bulletins"]
+    date_bulletin, date_jour = _dates(config, clock)
+    stats = {
+        "date_bulletin": date_bulletin, "actifs": 0, "deja_presents": 0,
+        "non_traites": 0, "sans_commune": 0, "appels": 0, "inseres": 0,
+        "vides": 0, "erreurs": 0,
+    }
+    run_id = conn.execute(
+        "INSERT INTO ingestion_run (source, params, started_at) VALUES ('bulletins', ?, ?)",
+        (json.dumps({"date_jour": date_jour}), _now_iso()),
+    ).lastrowid
+    conn.commit()
+
+    try:
+        if not b["activated"]:
+            _finir_run(conn, run_id, "ok", stats, note="désactivé (activated=false)")
+            return stats
+
+        actifs = _feux_actifs(conn)
+        stats["actifs"] = len(actifs)
+        deja = {
+            r["fire_event_id"] for r in conn.execute(
+                "SELECT fire_event_id FROM bulletin WHERE date_bulletin=?", (date_bulletin,)
+            )
+        }
+        a_traiter = [f for f in actifs if f["id"] not in deja]
+        stats["deja_presents"] = len(actifs) - len(a_traiter)
+        if len(a_traiter) > b["max_feux_par_jour"]:
+            stats["non_traites"] = len(a_traiter) - b["max_feux_par_jour"]
+            a_traiter = a_traiter[: b["max_feux_par_jour"]]
+
+        # Mot-clé par feu (touche la DB → dans le worker, AVANT le fan-out).
+        travail: list[tuple[int, str]] = []
+        for f in a_traiter:
+            mc = mots_cles_pour_feu(conn, config, f["id"])
+            if mc is None:
+                stats["sans_commune"] += 1
+            else:
+                travail.append((f["id"], mc))
+        stats["appels"] = len(travail)
+
+        # Fan-out RÉSEAU concurrent (threads) ; les résultats reviennent au worker.
+        resultats: dict[int, tuple[str, object]] = {}
+        if travail:
+            ex = ThreadPoolExecutor(max_workers=b["concurrence"])
+            futures = {ex.submit(_appel, mc, date_jour, config): fid for fid, mc in travail}
+            try:
+                for fut in as_completed(futures, timeout=b["timeout_job_s"]):
+                    resultats[futures[fut]] = fut.result()
+            except FuturesTimeout:
+                pass  # traînards : comptés en erreurs (non écrits) ci-dessous
+            finally:
+                ex.shutdown(wait=False, cancel_futures=True)
+
+        # Écriture SÉRIELLE (worker unique).
+        acq_at = _now_iso()
+        mots = dict(travail)
+        touches: list[int] = []
+        for fid, _mc in travail:
+            issue = resultats.get(fid)
+            if issue is None or issue[0] == "error":
+                stats["erreurs"] += 1
+                continue
+            parsed = issue[1]
+            if est_vide(parsed):
+                stats["vides"] += 1
+                continue
+            if _inserer_bulletin(conn, fid, date_bulletin, mots[fid], parsed,
+                                 provider=b["provider"], acq_at=acq_at):
+                stats["inseres"] += 1
+                touches.append(fid)
+
+        for fid in touches:
+            enqueue(conn, "feu", str(fid), stamp=acq_at, trigger="bulletins")
+        conn.commit()
+        _finir_run(conn, run_id, "ok", stats)
+        return stats
+    except Exception as exc:  # noqa: BLE001 — jamais bloquant
+        _finir_run(conn, run_id, "error", stats, note=f"{type(exc).__name__}: {exc}")
+        return stats
+
+
+def _inserer_bulletin(conn, fire_id, date_bulletin, mots_cles, parsed, *, provider, acq_at) -> bool:
+    """Insère un bulletin non vide (idempotent via UNIQUE). True si inséré, False si déjà présent."""
+    try:
+        conn.execute(
+            "INSERT INTO bulletin (fire_event_id, date_bulletin, mots_cles, resume, "
+            "indicateurs_json, sources_json, articles_valides, fournisseurs_ia, provider, "
+            "acq_at, ingested_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                fire_id, date_bulletin, mots_cles, parsed["resume"],
+                json.dumps(parsed["indicateurs"], ensure_ascii=False),
+                json.dumps(parsed["sources"], ensure_ascii=False),
+                parsed["articles_valides"],
+                json.dumps(parsed["fournisseurs_ia"], ensure_ascii=False)
+                if parsed["fournisseurs_ia"] is not None else None,
+                provider, acq_at, acq_at,
+            ),
+        )
+        return True
+    except sqlite3.IntegrityError:
+        return False  # déjà un bulletin pour (feu, jour) — rejeu, no-op (P1)
+
+
+def _finir_run(conn, run_id: int, status: str, stats: dict, *, note: str | None = None) -> None:
+    """Clôt l'ingestion_run avec le résumé du cycle (observabilité — Spec 01 §3.7)."""
+    detail = {k: v for k, v in stats.items() if k != "date_bulletin"}
+    if note:
+        detail["note"] = note
+    a_signaler = note or any(
+        stats[k] for k in ("erreurs", "vides", "sans_commune", "non_traites")
+    )
+    conn.execute(
+        "UPDATE ingestion_run SET finished_at=?, status=?, n_rows=?, n_new=?, error_text=? WHERE id=?",
+        (
+            _now_iso(), status, stats["appels"], stats["inseres"],
+            json.dumps(detail, ensure_ascii=False) if a_signaler else None, run_id,
+        ),
+    )
+    conn.commit()
