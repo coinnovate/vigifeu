@@ -1,0 +1,57 @@
+{
+  "requete": { "mots_cles": "incendie Saumos", "date_jour": "25/07/2026", "fenetre_jours": 1 },
+  "articles_analyses": 6,
+  "articles_valides": 6,
+  "articles_rejetes": [],
+  "indicateurs": [
+    {
+      "indicateur": "surface brûlée",
+      "type": "chiffre",
+      "valeur": "≥ 34000 ha",
+      "statut": "confirmé",
+      "sources": [
+        "https://france3-regions.franceinfo.fr/nouvelle-aquitaine/article1",
+        "https://www.sudouest.fr/gironde/article2"
+      ]
+    },
+    {
+      "indicateur": "nombre de pompiers mobilisés",
+      "type": "chiffre",
+      "valeur": "≥ 1750 pompiers",
+      "statut": "confirmé",
+      "sources": [
+        "https://france3-regions.franceinfo.fr/nouvelle-aquitaine/article1",
+        "https://www.francebleu.fr/gironde/article3"
+      ]
+    },
+    {
+      "indicateur": "personnes évacuées",
+      "type": "chiffre",
+      "valeur": "environ 500 personnes",
+      "statut": "environ",
+      "sources": [
+        "https://www.sudouest.fr/gironde/article2",
+        "https://www.20minutes.fr/planete/article4",
+        "",
+        "pas-une-url"
+      ]
+    },
+    {
+      "indicateur": "heure de début",
+      "type": "heure",
+      "valeur": "",
+      "statut": "confirmé",
+      "sources": []
+    },
+    {
+      "indicateur": "origine",
+      "type": "options",
+      "valeur": "",
+      "statut": "inconnu",
+      "sources": []
+    }
+  ],
+  "resume": "Le feu de Saumos a débuté le 22 juillet 2026 et a mobilisé au moins 1 750 pompiers. Plus de 34 000 hectares ont été brûlés.",
+  "fournisseurs_ia": { "validation": "mistral", "extraction": "mistral", "resume": "mistral" },
+  "erreurs": []
+}

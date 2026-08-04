@@ -235,6 +235,51 @@ sentinelhub_source = "Copernicus Sentinel-2 — fausse-couleur SWIR"   # attribu
 sentinelhub_after_days = 30   # marge après la dernière détection (chances d'un passage clair post-feu)
 sentinelhub_max_cloud_pct = 20   # seuil « clair » (%), filtré sur le WFS côté client
 
+[bulletins]
+# Spec 09 — bulletin de veille presse quotidien par feu actif, via l'API news.co-innovate.eu
+# (scraping presse + consolidation IA ; le champ `resume` = corps du bulletin). Lignée `declaree`,
+# distincte du satellite (P0). `activated` reste OFF tant que l'API n'est pas validée depuis le VPS :
+# le job tourne à blanc. L'appel est BACKEND uniquement (pas d'auth, pas de CORS côté API).
+activated = false
+base_url = "https://news.co-innovate.eu"
+heure_locale = 15                       # heure Europe/Paris de déclenchement (cron tz=Europe/Paris)
+timezone = "Europe/Paris"               # fuseau du job ET de date_jour envoyée à l'API
+nb_articles = 4                         # cible d'articles exploitables
+min_sources = 2                         # concordance minimale (garde-fou anti-invention)
+fenetre_jours = 1                       # tolérance : jours AVANT date_jour aussi inclus
+langue = "fr"
+pays = "FR"
+mot_cle_prefixe = "incendie"            # repli "feu" côté code (Spec 09 §3/§9)
+max_feux_par_jour = 50                  # garde-fou quota ; au-delà = priorité FRP, reste consigné
+concurrence = 4                         # fan-out réseau (threads) ; l'écriture DB reste sérielle
+timeout_feu_s = 120                     # timeout dur par feu (POST + polling)
+timeout_job_s = 600                     # plafond global du job (non bloquant)
+poll_intervalle_s = 3                   # cadence d'interrogation GET /recherches/{id}
+max_retries = 2
+retry_wait_min_s = 5
+retry_wait_max_s = 60
+provider = "co-innovate"
+# Jeu d'indicateurs « incendie de forêt » (recommandé par le guide d'intégration). Grandeurs
+# croissantes → agregation="max" (garde la dernière/plus haute estimation, pas de retour à inconnu).
+# ⚠️ Spec 09 §10 : comptes, JAMAIS de nom de personne (RGPD). Ajouter un indicateur ne coûte aucun
+# appel IA supplémentaire.
+indicateurs = [
+    { nom = "surface brûlée",                    type = "chiffre", unite = "ha",           agregation = "max" },
+    { nom = "nombre de pompiers mobilisés",      type = "chiffre", unite = "pompiers",     agregation = "max" },
+    { nom = "avions bombardiers d'eau",          type = "chiffre", unite = "avions",       agregation = "max" },
+    { nom = "hélicoptères bombardiers d'eau",    type = "chiffre", unite = "hélicoptères", agregation = "max" },
+    { nom = "personnes évacuées",                type = "chiffre", unite = "personnes",    agregation = "max" },
+    { nom = "habitations menacées ou détruites", type = "chiffre", unite = "bâtiments",    agregation = "max" },
+    { nom = "nombre de blessés",                 type = "chiffre", unite = "personnes",    agregation = "max" },
+    { nom = "nombre de morts",                   type = "chiffre", unite = "personnes",    agregation = "max" },
+    { nom = "communes concernées",               type = "texte" },
+    { nom = "département",                        type = "texte" },
+    { nom = "jour de début",                     type = "date" },
+    { nom = "heure de début",                    type = "heure" },
+    { nom = "origine", type = "options", options = ["accidentelle", "criminelle", "foudre", "inconnue"] },
+    { nom = "statut du feu", type = "options", options = ["hors de contrôle", "fixé", "maîtrisé", "éteint"] },
+]
+
 [indicateurs]
 # Seuils de sévérité du bandeau d'indicateurs de la fiche feu (couleur = état, factuel).
 # Croissants : faible < s0 ≤ modéré < s1 ≤ élevé < s2 ≤ très élevé.
