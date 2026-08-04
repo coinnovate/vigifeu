@@ -117,6 +117,30 @@ def test_desactive_marche_a_blanc(db, monkeypatch):
     assert conn.execute("SELECT COUNT(*) AS n FROM bulletin").fetchone()["n"] == 0
 
 
+def test_generer_pour_feu_cible(db, monkeypatch):
+    """Chemin ciblé (CLI/démo) : un feu NON actif reçoit quand même un bulletin, avec date visée."""
+    conn, config = db
+    conn.execute("INSERT INTO commune (code_insee, slug, nom) VALUES ('33001', 'saumos', 'Saumos')")
+    conn.execute(
+        "INSERT INTO fire_event (created_at, lifecycle, qualification, first_acq_at) "
+        "VALUES ('2026-07-25T00:00:00Z', 'archive', 'vegetation_confirme', '2026-07-25T00:00:00Z')"
+    )
+    fid = conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+    conn.execute(
+        "INSERT INTO fe_commune_rel (fire_event_id, code_insee, rel_type, valid_from) "
+        "VALUES (?, '33001', 'emprise_dans_commune', '2026-07-25T00:00:00Z')", (fid,)
+    )
+    conn.commit()
+    _patch(monkeypatch, PARSED_OK)
+    res = bulletins.generer_pour_feu(conn, config, fid, date_jour="25/07/2026")
+    assert res["status"] == "insere"
+    assert res["date_bulletin"] == "2026-07-25"
+    row = conn.execute("SELECT date_bulletin, mots_cles FROM bulletin WHERE fire_event_id=?", (fid,)).fetchone()
+    assert row["date_bulletin"] == "2026-07-25" and row["mots_cles"] == "incendie Saumos"
+    # Rejeu = déjà présent (idempotent).
+    assert bulletins.generer_pour_feu(conn, config, fid, date_jour="25/07/2026")["status"] == "deja_present"
+
+
 def test_cap_max_feux(db, monkeypatch):
     conn, config = db
     for i in range(3):

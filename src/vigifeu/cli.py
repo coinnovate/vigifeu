@@ -22,6 +22,9 @@
   vigifeu poi-import PATH [--source osm|bdtopo|georisques]
                                   — importe une source du référentiel POI (défaut osm) + dédup inter-sources + recense par commune
   vigifeu contexte                — tire drought/vigieau des communes concernées (flags config)
+  vigifeu bulletins [--feu PUBLIC_ID] [--date JJ/MM/AAAA]
+                                  — force un cycle de veille presse hors 15h (daemon arrêté) ;
+                                    --feu cible un seul feu (tout lifecycle) pour une démo
   vigifeu generer [--limit N]     — régénère les pages en attente dans regen_queue (Lot 4)
   vigifeu rebuild                 — régénère TOUT le HTML (après un changement de gabarit)
 """
@@ -343,6 +346,35 @@ def cmd_rebuild() -> None:
     )
 
 
+def cmd_bulletins(public_id: str | None, date_jour: str | None) -> None:
+    """Force un cycle de bulletins hors 15h (le cron reste piloté par [bulletins].activated).
+
+    À lancer DAEMON ARRÊTÉ (écrivain SQLite unique, comme rebuild). Sans --feu : cycle complet
+    sur les feux actifs (activated forcé le temps du run). Avec --feu PUBLIC_ID : un seul feu,
+    quel que soit son lifecycle (démo/test), avec --date JJ/MM/AAAA pour viser un jour précis.
+    Régénère ensuite les fiches enfilées."""
+    from vigifeu.generate.runner import consume, finalize_site
+    from vigifeu.ingest.bulletins import generer_bulletins, generer_pour_feu
+
+    conn, config = _open()
+    config["bulletins"]["activated"] = True  # forçage explicite de l'invocation manuelle
+    if public_id:
+        row = conn.execute("SELECT id FROM fire_event WHERE public_id=?", (public_id,)).fetchone()
+        if row is None:
+            print(f"feu introuvable : {public_id}", file=sys.stderr)
+            sys.exit(1)
+        res = generer_pour_feu(conn, config, row["id"], date_jour=date_jour)
+        print(f"bulletin {public_id} : {res}")
+    else:
+        stats = generer_bulletins(conn, config)
+        print(f"bulletins : {stats}")
+
+    stamp = datetime.now(UTC).isoformat()
+    gen = consume(conn, config, stamp=stamp)
+    finalize_site(conn, config)
+    print(f"régénéré : {gen['feu']} feux, {gen['erreurs']} erreurs → {config['generate']['site_dir']}")
+
+
 def cmd_contexte() -> None:
     from vigifeu.engine.commune_context import refresh_commune_context
 
@@ -400,6 +432,8 @@ def main() -> None:
             cmd_poi_import(rest[0], _flag(rest, "source"))
         case "contexte":
             cmd_contexte()
+        case "bulletins":
+            cmd_bulletins(_flag(rest, "feu"), _flag(rest, "date"))
         case "generer":
             cmd_generer(int(_flag(rest, "limit")) if _flag(rest, "limit") else None)
         case "rebuild":

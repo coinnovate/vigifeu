@@ -346,6 +346,44 @@ def generer_bulletins(conn: sqlite3.Connection, config: dict, *, clock: datetime
         return stats
 
 
+def generer_pour_feu(conn: sqlite3.Connection, config: dict, event_id: int, *,
+                     clock: datetime | None = None, date_jour: str | None = None) -> dict:
+    """Force un bulletin pour UN feu donné, quel que soit son lifecycle (usage CLI/démo).
+
+    Contourne la sélection « actifs seulement » et le flag `activated` (invocation explicite).
+    `date_jour` (JJ/MM/AAAA) permet de viser un jour de publication précis (ex. rejouer un feu
+    passé). Retourne un statut. Ne lève pas."""
+    if date_jour:
+        d, m, y = date_jour.split("/")
+        date_bulletin = f"{y}-{m}-{d}"
+    else:
+        date_bulletin, date_jour = _dates(config, clock)
+    mots = mots_cles_pour_feu(conn, config, event_id)
+    if mots is None:
+        return {"status": "sans_commune"}
+    if conn.execute(
+        "SELECT 1 FROM bulletin WHERE fire_event_id=? AND date_bulletin=?",
+        (event_id, date_bulletin),
+    ).fetchone():
+        return {"status": "deja_present", "date_bulletin": date_bulletin}
+    try:
+        parsed = fetch_bulletin(mots, date_jour, config)
+    except Exception as exc:  # noqa: BLE001 — jamais bloquant
+        return {"status": "erreur", "mots_cles": mots, "error": f"{type(exc).__name__}: {exc}"}
+    if est_vide(parsed):
+        return {"status": "vide", "mots_cles": mots}
+    acq = _now_iso()
+    _inserer_bulletin(conn, event_id, date_bulletin, mots, parsed,
+                      provider=config["bulletins"]["provider"], acq_at=acq)
+    enqueue(conn, "feu", str(event_id), stamp=acq, trigger="bulletins-cli")
+    conn.commit()
+    return {
+        "status": "insere", "date_bulletin": date_bulletin, "mots_cles": mots,
+        "resume": parsed["resume"], "n_indicateurs": len(parsed["indicateurs"]),
+        "n_sources": len(parsed["sources"]),
+    }
+
+
 def _inserer_bulletin(conn, fire_id, date_bulletin, mots_cles, parsed, *, provider, acq_at) -> bool:
     """Insère un bulletin non vide (idempotent via UNIQUE). True si inséré, False si déjà présent."""
     try:
