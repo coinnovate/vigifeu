@@ -37,6 +37,7 @@ from vigifeu.engine.regen import enqueue, enqueue_fire_update
 from vigifeu.engine.relations import fire_footprint_l93
 from vigifeu.engine.wind import recompute_direction_vent
 from vigifeu.generate.runner import consume, finalize_site, sync_static
+from vigifeu.ingest.bulletins import generer_bulletins
 from vigifeu.ingest.firms import fetch_cycle, fetch_firms_backfill
 from vigifeu.ingest.weather import fetch_weather_obs
 from vigifeu.model.archive import archive_sweep
@@ -213,6 +214,22 @@ def main() -> None:
         run_regen("contexte")
         ping_healthcheck(os.environ.get("HEALTHCHECK_CONTEXT_URL"))
 
+    def job_bulletins() -> None:
+        # Spec 09 §4 : bulletin de veille presse quotidien par feu actif. Sérialisé dans le
+        # worker unique (écrivain SQLite unique préservé). Non bloquant : le fan-out réseau est
+        # concurrent EN INTERNE, seules les écritures sont sérielles. Marche à blanc tant que
+        # [bulletins].activated=false. Draine la regen des fiches touchées, puis healthcheck.
+        stats = generer_bulletins(conn, config)
+        log.info(
+            "bulletins (%s): %d actifs, %d insérés, %d vides, %d erreurs, "
+            "%d déjà présents, %d sans commune, %d hors quota",
+            stats["date_bulletin"], stats["actifs"], stats["inseres"], stats["vides"],
+            stats["erreurs"], stats["deja_presents"], stats["sans_commune"], stats["non_traites"],
+        )
+        if stats["inseres"]:
+            run_regen("bulletins")
+        ping_healthcheck(os.environ.get("HEALTHCHECK_BULLETINS_URL"))
+
     def job_finalize_site() -> None:
         # Passe nocturne (Spec 04 §3) : artefacts « site-level » indépendants de la
         # regen_queue — pages éditoriales, listes départements, sitemaps, robots,
@@ -265,6 +282,12 @@ def main() -> None:
         id="archive_sweep", max_instances=1, coalesce=True,
     )
     scheduler.add_job(
+        job_bulletins, "cron",
+        hour=config["bulletins"]["heure_locale"], minute=0,
+        timezone=config["bulletins"]["timezone"],   # ~15h Europe/Paris (Spec 09 §5)
+        id="bulletins", max_instances=1, coalesce=True,
+    )
+    scheduler.add_job(
         job_finalize_site, "cron", hour=4, minute=0,   # nuit, après l'archivage
         id="finalize_site", max_instances=1, coalesce=True,
     )
@@ -280,8 +303,9 @@ def main() -> None:
     log.info(
         "démarrage — fetch+moteur+regen immédiat puis toutes les %d min ; "
         "backfill+gap+cycle de vie horaires ; archive 03h30 ; contexte 06h00 ; "
-        "finalize_site 04h00",
+        "finalize_site 04h00 ; bulletins %dh %s",
         config["firms"]["fetch_interval_min"],
+        config["bulletins"]["heure_locale"], config["bulletins"]["timezone"],
     )
     # Assets statiques + carte-config.js (clé MapTiler depuis l'env) une fois au boot.
     sync_static(config)
