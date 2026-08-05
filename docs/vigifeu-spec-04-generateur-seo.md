@@ -1,7 +1,8 @@
 # Vigifeu — Spécification 04 : Générateur statique & SEO/GEO
 
-**Version :** 0.3
+**Version :** 0.4
 **Références :** cadrage v0.3 (§8.5, §8.6, §15bis), Spec 01 (§8), Spec 02 (§8), Spec 03 (lexique et structures de pages)
+**Journal :** 0.4 — ajout §11 (PWA « installable safe »).
 **Périmètre :** production des pages publiques et stratégie de visibilité (moteurs de recherche classiques et moteurs génératifs / assistants IA). Dernier module du socle pré-SaaS.
 
 ---
@@ -111,6 +112,7 @@ Les assistants IA citent les sources qui leur donnent des **faits datés, sourc�
 3. **Validation JSON-LD** (schéma) et HTML (W3C) sur l'échantillon de pages de chaque build.
 4. **Budget perf** vérifié en CI (taille HTML, absence de JS bloquant).
 5. **Aucun horodatage de génération dans le HTML** (grep inverse) — seule l'heure de la donnée apparaît (Spec 03 P5).
+6. **Garde-fou PWA (§11)** : test automatique vérifiant que le service worker ne précache **ni** page de feu (`/feux/…`) **ni** GeoJSON — le cache ne doit jamais pouvoir servir une détection périmée.
 
 ---
 
@@ -121,6 +123,39 @@ Les assistants IA citent les sources qui leur donnent des **faits datés, sourc�
 3. Pages départements : simples listes (retenu par défaut) ou fiches enrichies (Météo des forêts du jour, historique départemental).
 4. Flux Atom : périmètre des « changements majeurs » d'un feu justifiant une entrée (nouvelle commune concernée ? progression > N km ?).
 5. Politique exacte de `llms.txt` et conditions de citation — à aligner avec les CGU (module juridique).
+
+---
+
+## 11. Progressive Web App (PWA)
+
+Le site est **installable** sur l'écran d'accueil (mobile et desktop) via un Web App Manifest et un service worker. Niveau retenu : **« installable safe »** — l'app et le confort d'installation, sans jamais introduire le risque de servir une donnée périmée. Fonctionnalité facultative et réversible : elle tient dans une section `[pwa]` de `config/params.toml` ; la retirer suffit à revenir à un statique Nginx ordinaire.
+
+**11.1 Ce qui est émis.** Trois artefacts « site-level », écrits en fin de build (`generate/pwa.py`, appelé par `finalize_site`, au même titre que sitemaps/robots) :
+
+* `manifest.webmanifest` (racine) — nom, `short_name`, description, `theme_color`/`background_color`, `display: standalone`, `start_url: /`, `scope: /`, icônes 192/512 (déjà présentes, `purpose: any` — nos icônes ne sont pas dessinées *maskable*). Tous les champs viennent de la config `[pwa]`, aucune constante en dur.
+* `sw.js` (**racine**, jamais sous `/static/` : la portée d'un service worker ne peut pas dépasser son répertoire d'origine ; il doit couvrir `/`).
+* `offline.html` (racine) — page de repli servie hors ligne, aux couleurs du site.
+
+Le gabarit de base pose alors sur **toutes** les pages : `<link rel="manifest">`, `<meta name="theme-color">` et l'enregistrement du service worker (injectés via le global Jinja `pwa`, comme `analytics` — pas dans chaque contexte de page). Le contenu reste complet sans JS (P3) : l'enregistrement du SW est une amélioration progressive.
+
+**11.2 Stratégie du service worker (le cœur du « safe »).** La contrainte est celle du produit : les détections évoluent en continu (§9.5, Spec 03 P5) ; un cache agressif servirait des feux périmés — inacceptable. La stratégie est donc **asymétrique** :
+
+| Ressource | Stratégie | Raison |
+|---|---|---|
+| Shell de présentation (`/static/` : CSS, JS carte, icônes) + `offline.html` + manifest | **stale-while-revalidate**, précaché à l'installation | aucune donnée de feu ; gain de perf terrain |
+| Pages HTML (carte, fiches feu/commune) | **réseau d'abord**, repli `offline.html` si hors ligne — **jamais mises en cache** | une fiche périmée ne doit jamais être servie |
+| GeoJSON, flux Atom, `carte-config.js` | **réseau direct**, non interceptés | données chaudes ; fraîcheur (P0) |
+| Origines tierces (tuiles MapTiler, imagerie Sentinel Hub) | non interceptées | hors périmètre du SW |
+
+`maplibre-gl.js` (~1 Mo) est volontairement **hors précache** (trop lourd pour l'installation) : il est mis en cache opportunistement par la règle *stale-while-revalidate* de `/static/`.
+
+**11.3 Versionnement du cache.** Le nom du cache est une **empreinte du contenu** des assets shell (`sentifeu-shell-<hash>`). Il se renomme dès qu'un CSS/JS change ; l'ancien cache est purgé à l'activation. Pas de version à incrémenter à la main, cohérent avec P1 (le site est une fonction pure des données + des assets).
+
+**11.4 Service (Nginx).** `sw.js` est servi en `Cache-Control: no-cache` (le navigateur revalide à chaque visite, sinon une version périmée du SW peut persister ~24 h) ; le manifest reçoit son type MIME `application/manifest+json` (absent des `mime.types` par défaut). Réglages présents dans les deux vhosts (`deploy/nginx-sentifeu.conf` public et `-beta.conf` privé).
+
+**11.5 Réversibilité.** Retirer la section `[pwa]` cesse d'émettre les trois artefacts et les balises. Un SW déjà installé chez un visiteur se désinstalle de lui-même à la visite suivante, faute de trouver `/sw.js` (404) — aucune manœuvre côté client.
+
+**11.6 Évolution possible (hors périmètre v1).** Un cran « offline complet » ciblé sur les **fiches de feux actifs** (utile en zone mal couverte) reste ouvert, à condition de gérer explicitement la péremption et d'afficher l'âge des données. Non retenu ici : le positionnement veille quasi temps réel fait primer la fraîcheur sur la disponibilité hors ligne.
 
 ---
 
