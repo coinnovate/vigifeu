@@ -257,8 +257,10 @@ sentinelhub_max_cloud_pct = 20   # seuil « clair » (%), filtré sur le WFS cô
 # Spec 09 — bulletin de veille presse quotidien par feu actif, via l'API news.co-innovate.eu
 # (scraping presse + consolidation IA ; le champ `resume` = corps du bulletin). Lignée `declaree`,
 # distincte du satellite (P0). `activated` reste OFF tant que l'API n'est pas validée depuis le VPS :
-# le job tourne à blanc. L'appel est BACKEND uniquement (pas d'auth, pas de CORS côté API).
-activated = false
+# l'appel est BACKEND uniquement (pas d'auth, pas de CORS côté API). Activé le 2026-08-05 après
+# validation bout-en-bout en prod (bulletin réel généré sur un feu médiatisé). Repasser à false
+# désactive le cron 15h sans rien casser (marche à blanc).
+activated = true
 base_url = "https://news.co-innovate.eu"
 heure_locale = 15                       # heure Europe/Paris de déclenchement (cron tz=Europe/Paris)
 timezone = "Europe/Paris"               # fuseau du job ET de date_jour envoyée à l'API

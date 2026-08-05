@@ -110,9 +110,10 @@ def test_feu_sans_commune_saute(db, monkeypatch):
 
 def test_desactive_marche_a_blanc(db, monkeypatch):
     conn, config = db
+    config["bulletins"]["activated"] = False   # explicite : marche à blanc quand désactivé
     _actif(conn)
     _patch(monkeypatch, PARSED_OK)  # ne doit pas être appelé
-    stats = bulletins.generer_bulletins(conn, config, clock=CLOCK)  # activated=false par défaut
+    stats = bulletins.generer_bulletins(conn, config, clock=CLOCK)
     assert stats["appels"] == 0 and stats["inseres"] == 0
     assert conn.execute("SELECT COUNT(*) AS n FROM bulletin").fetchone()["n"] == 0
 
