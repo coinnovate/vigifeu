@@ -105,6 +105,18 @@ Structure de haut en bas ; chaque bloc cite ses tables sources (Spec 01).
 
 **3.4 Communes concernées.** Liste issue de `fe_commune_rel`, groupée par type de relation : « emprise sur la commune » / « à moins de {5/10/20} km » / « dans la direction actuelle du vent ». Chaque commune cliquable vers sa fiche, avec l'intervalle de validité si la relation est fermée (« concernée du {date} au {date} »).
 
+**3.4bis Bulletins de veille presse (phase 2 — Spec 09).** Ajoutée après les enjeux, **avant** la
+chronologie. Timeline **datée, antichronologique**, d'une lignée **`declaree` distincte du satellite** :
+chaque bulletin est une synthèse d'articles de presse consolidée automatiquement (API
+`news.co-innovate.eu`, champ `resume`), **attribuée, datée, marquée « Veille presse — à vérifier »**,
+avec ses **sources** en liens par hôte (`rel="nofollow"`). Détail chiffré (indicateurs `confirmé`/`environ`)
+replié en second niveau ; jamais de nominatif ni de photo (Spec 09 §10). **Section absente s'il n'y a aucun
+bulletin** (dégradé honnête, comme les enjeux sans référentiel). Alimentée par un job quotidien
+(~15h Europe/Paris) sur les feux actifs (`fire_event` → table `bulletin`). Discipline **P0** : la section
+**cite** la presse et n'affirme rien en propre → elle est **exemptée du lint lexique** (un terme comme
+« hors de contrôle » y est admis s'il est attribué). Modèle, orchestration, affichage et cadre juridique :
+**Spec 09**.
+
 **3.5 Chronologie.** Un jalon par passage avec détections : date/heure, satellite, n hotspots (dédupliqués), FRP si comparable, événements de vie (création, fusion, reprise, requalification). Ordre antichronologique.
 
 **3.6 Courbe d'intensité.** FRP total par passage, séries nuit et jour distinctes et visuellement séparées, avec la note « les passages de nuit et de jour ne sont pas comparables entre eux (sensibilité du capteur) ».
