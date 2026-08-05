@@ -92,7 +92,7 @@ def process_cycle(conn: sqlite3.Connection, config: dict, *, stamp: str | None =
                                 trigger=f"run:{trigger_run_id}" if trigger_run_id else "process_cycle")
             versioned.append(eid)
 
-    life = apply_lifecycle(conn, config, clock=clock)
+    life = apply_lifecycle(conn, config, clock=clock, stamp=stamp)
 
     return {
         "marked": marked,

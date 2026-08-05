@@ -131,12 +131,15 @@ def main() -> None:
         # Passe horaire (Spec 02 §4.5) : transitions des feux sans nouveauté
         # (actif → plus_detecte → archive) contre l'heure courante.
         now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        res = apply_lifecycle(conn, config, clock=now)
+        res = apply_lifecycle(conn, config, clock=now, stamp=now)
         if res["to_plus_detecte"] or res["to_archive"]:
             log.info(
                 "cycle de vie: %d → plus_detecte, %d → archive",
                 res["to_plus_detecte"], res["to_archive"],
             )
+            # apply_lifecycle a ré-enfilé les fiches/carte/communes impactées
+            # (Spec 02 §4.5, « dernière régénération ») → on draine dans la foulée.
+            run_regen("lifecycle")
 
     def job_weather_obs() -> None:
         # Spec 02 §2 : météo constatée pour chaque feu actif qualifié végétation,

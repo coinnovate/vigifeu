@@ -36,7 +36,10 @@ rattachement (robuste au rejeu, où les étiquettes peuvent être en retard).
 
 Le versionnage, la qualification et les mesures sont d'autres étapes du cycle
 (§3) : ce module ne touche que `fire_event` (identité, cycle de vie, first/last
-acq), `hotspot_raw.fire_event_id` (membership courante) et `fe_fe_rel`.
+acq), `hotspot_raw.fire_event_id` (membership courante) et `fe_fe_rel`. Seule
+exception : `apply_lifecycle` émet `regen_queue` pour un feu publié qui change
+d'étiquette (§4.5, « dernière régénération ») — sinon la fiche resterait figée
+sur « actif » puisque, sans nouveau hotspot, plus rien ne la ré-enfile.
 """
 
 from __future__ import annotations
@@ -46,6 +49,7 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 
 from vigifeu.engine import geo
+from vigifeu.engine.regen import enqueue, enqueue_fire_update
 
 _ISO = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -277,12 +281,21 @@ def _add_rel(conn: sqlite3.Connection, fe_id: int, related_id: int,
     )
 
 
-def apply_lifecycle(conn: sqlite3.Connection, config: dict, *, clock: str | None = None) -> dict:
+def apply_lifecycle(conn: sqlite3.Connection, config: dict, *, clock: str | None = None,
+                    stamp: str | None = None) -> dict:
     """Transitions de cycle de vie (§4.5) contre l'horloge des données.
 
     actif → plus_detecte après `t_silence_h` ; plus_detecte → archive après
     `t_reprise_days`. `clock` par défaut = dernière acquisition connue (rejeu) ;
     en production, passer l'heure courante. Retourne les compteurs de transitions.
+
+    Un feu publié qui change d'étiquette est ré-enfilé dans `regen_queue` (§4.5) :
+    - → plus_detecte : seul le libellé de la fiche change (« plus détecté
+      depuis… ») — la carte et la situation en cours des communes gardent le feu ;
+    - → archive : le feu quitte la carte et la situation en cours ; on régénère
+      donc fiche + carte + communes à relation ouverte.
+    Sans nouveau hotspot, rien d'autre ne ré-enfilerait ces pages : elles
+    resteraient figées sur l'état antérieur.
     """
     cl = config["clustering"]
     t_silence = timedelta(hours=cl["t_silence_h"])
@@ -294,10 +307,12 @@ def apply_lifecycle(conn: sqlite3.Connection, config: dict, *, clock: str | None
             return {"to_plus_detecte": 0, "to_archive": 0}
         clock = row["m"]
     now = _parse(clock)
+    if stamp is None:
+        stamp = clock
 
     to_pd = to_arch = 0
     for r in conn.execute(
-        "SELECT id, last_acq_at, lifecycle FROM fire_event "
+        "SELECT id, last_acq_at, lifecycle, public_id FROM fire_event "
         "WHERE lifecycle IN ('actif', 'plus_detecte')"
     ).fetchall():
         if not r["last_acq_at"]:
@@ -306,8 +321,16 @@ def apply_lifecycle(conn: sqlite3.Connection, config: dict, *, clock: str | None
         if silence >= t_reprise:
             conn.execute("UPDATE fire_event SET lifecycle='archive' WHERE id=?", (r["id"],))
             to_arch += 1
+            if r["public_id"]:
+                communes = [c["code_insee"] for c in conn.execute(
+                    "SELECT DISTINCT code_insee FROM fe_commune_rel "
+                    "WHERE fire_event_id=? AND valid_to IS NULL", (r["id"],)
+                ).fetchall()]
+                enqueue_fire_update(conn, r["id"], communes, stamp=stamp, trigger="lifecycle")
         elif silence >= t_silence and r["lifecycle"] == "actif":
             conn.execute("UPDATE fire_event SET lifecycle='plus_detecte' WHERE id=?", (r["id"],))
             to_pd += 1
+            if r["public_id"]:
+                enqueue(conn, "feu", str(r["id"]), stamp=stamp, trigger="lifecycle")
     conn.commit()
     return {"to_plus_detecte": to_pd, "to_archive": to_arch}

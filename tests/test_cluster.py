@@ -136,6 +136,61 @@ def test_cycle_de_vie_transitions(db):
     assert conn.execute("SELECT lifecycle FROM fire_event").fetchone()["lifecycle"] == "archive"
 
 
+def _queued(conn, page_type, ref):
+    return conn.execute(
+        "SELECT COUNT(*) AS n FROM regen_queue "
+        "WHERE page_type=? AND page_ref=? AND processed_at IS NULL",
+        (page_type, ref),
+    ).fetchone()["n"]
+
+
+def test_transition_reenfile_fiche_publiee(db):
+    """§4.5 « dernière régénération » : un feu PUBLIÉ qui se tait ré-enfile ses pages.
+
+    → plus_detecte : seule la fiche change (« plus détecté depuis… »), pas la carte
+    ni les communes (le feu reste en situation en cours). → archive : le feu quitte
+    la carte et la situation en cours ⇒ fiche + carte + communes à relation ouverte.
+    """
+    conn, config = db
+    a = insert_hotspot(conn, 44.900, -1.020, "2026-07-20T12:00:00Z")
+    cluster_new_hotspots(conn, config, stamp=STAMP)
+    fe_id = _event_of(conn, a)
+    # Simule la publication (public_id) + une relation commune ouverte.
+    conn.execute("UPDATE fire_event SET public_id='2026-test' WHERE id=?", (fe_id,))
+    conn.execute(
+        "INSERT INTO commune (code_insee, slug, nom) VALUES ('33333', 'le-porge', 'Le Porge')"
+    )
+    conn.execute(
+        "INSERT INTO fe_commune_rel (fire_event_id, code_insee, rel_type, valid_from) "
+        "VALUES (?, '33333', 'emprise_dans_commune', ?)",
+        (fe_id, STAMP),
+    )
+    conn.commit()
+
+    # → plus_detecte : seule la fiche.
+    apply_lifecycle(conn, config, clock="2026-07-21T18:00:00Z", stamp=STAMP)
+    assert _queued(conn, "feu", str(fe_id)) == 1
+    assert _queued(conn, "carte", "france") == 0
+    assert _queued(conn, "commune", "33333") == 0
+
+    # → archive : fiche (toujours en attente) + carte + commune.
+    apply_lifecycle(conn, config, clock="2026-07-28T12:00:00Z", stamp=STAMP)
+    assert _queued(conn, "feu", str(fe_id)) == 1
+    assert _queued(conn, "carte", "france") == 1
+    assert _queued(conn, "commune", "33333") == 1
+
+
+def test_transition_feu_non_publie_n_enfile_rien(db):
+    """Un suspect (sans public_id) n'a pas de page : aucune régénération émise."""
+    conn, config = db
+    insert_hotspot(conn, 44.900, -1.020, "2026-07-20T12:00:00Z")
+    cluster_new_hotspots(conn, config, stamp=STAMP)
+    apply_lifecycle(conn, config, clock="2026-07-28T12:00:00Z", stamp=STAMP)
+    assert conn.execute(
+        "SELECT COUNT(*) AS n FROM regen_queue"
+    ).fetchone()["n"] == 0
+
+
 def test_idempotence(db):
     """Relancer le clustering sans nouveau hotspot = no-op."""
     conn, config = db
