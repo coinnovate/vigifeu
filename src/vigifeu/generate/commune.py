@@ -58,7 +58,7 @@ def _situation(conn, code_insee, derniere_obs):
         else:
             phrase = None
         if phrase:
-            items.append({"phrase": phrase, "href": href})
+            items.append({"phrase": phrase, "href": href, "lien": fr.lien_fiche_feu(lieu)})
     return items
 
 
@@ -126,6 +126,7 @@ def _historique(conn, code_insee):
         suivis.append({
             "phrase": fr.commune_feu_suivi_intervalle(lieu, r["vf"], r["vt"]),
             "href": f"/feux/{r['public_id']}/",
+            "lien": fr.lien_fiche_feu(lieu),
         })
     return {"synthese": synthese, "notables": notables, "suivis": suivis}
 

@@ -20,7 +20,7 @@
 <h2>Situation en cours</h2>
 {% if situation %}
 {% for item in situation %}
-<p>{{ item.phrase }}. {% if item.href %}<a href="{{ item.href }}">Voir la fiche du feu</a>{% endif %}</p>
+<p>{{ item.phrase }}. {% if item.href %}<a href="{{ item.href }}">{{ item.lien }}</a>{% endif %}</p>
 {% endfor %}
 {% else %}
 <p>{{ aucun_feu }}.</p>
@@ -60,7 +60,7 @@
 <h3>Feux suivis par {{ marque }}</h3>
 <ul>
 {% for f in historique.suivis %}
-<li>{{ f.phrase }} — <a href="{{ f.href }}">fiche du feu</a></li>
+<li>{{ f.phrase }} — <a href="{{ f.href }}">{{ f.lien }}</a></li>
 {% endfor %}
 </ul>
 {% endif %}

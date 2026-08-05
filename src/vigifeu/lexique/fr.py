@@ -608,6 +608,15 @@ def commune_feu_suivi_intervalle(nom: str, valid_from: str, valid_to: str | None
     return f"Concernée par le feu de {nom} du {date_fr(valid_from)} au {date_fr(valid_to)}"
 
 
+def lien_fiche_feu(nom: str) -> str:
+    """Texte d'ancre du lien vers une fiche feu (Spec 04 §5, SEO §8.4).
+
+    Ancre descriptive porteuse du lieu plutôt que « voir la fiche » : le mot-clé
+    utile (« feu de {nom} ») est dans le texte cliquable, pas dans un générique.
+    """
+    return f"Plus de détails sur le feu de {nom}"
+
+
 def commune_historique_bdiff(n: int, surface_ha_totale: float | None, depuis: int) -> str:
     """Synthèse de l'historique BDIFF de la commune (Spec 03 §4.4)."""
     if n == 0:
