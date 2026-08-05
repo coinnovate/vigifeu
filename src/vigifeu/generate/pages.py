@@ -94,6 +94,9 @@ def build_static_pages(conn: sqlite3.Connection, config: dict, env: Environment)
                     graph=jsonld.render_graph(org, faq))
     ctx["faq"] = FAQ_LIBELLES
     ctx["latence_nrt"] = latence_nrt_stats(conn, config)   # mesure chiffrée (cadrage §15bis)
+    # Attribution des sources (millésime IGN) — la méthodologie porte désormais l'attribution
+    # complète (le pied de page ne la duplique plus, Spec 03 §2.7).
+    ctx["referentiel_millesime"] = gen["referentiel_millesime"]
     write_atomic(site / "methodologie" / "index.html", env.get_template("methodologie.html.j2").render(**ctx))
     n += 1
 

@@ -139,7 +139,9 @@ def test_html_structure_et_sans_js(html):
     assert "<link rel=\"canonical\" href=\"https://sentifeu.fr/feux/2026-saumos/\">" in page
     assert "| Sentifeu</title>" in page  # marque publique (codename interne = Vigifeu)
     assert "Chronologie" in page and "Communes concernées" in page
-    assert "NASA FIRMS" in page  # attributions présentes
+    # Attribution des sources (§2.7) : portée par la page méthodologie, liée depuis le pied
+    # (elle n'est plus dupliquée sur chaque fiche).
+    assert 'href="/methodologie/"' in page
     # Carte = enrichissement : scripts présents mais DIFFÉRÉS (defer), contenu complet sans eux (P3/§8)
     assert 'data-carte="feu"' in page
     assert 'src="/static/js/maplibre-gl.js" defer' in page
