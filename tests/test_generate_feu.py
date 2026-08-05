@@ -170,7 +170,7 @@ def test_bulletins_section(html):
     assert b["date"] == "25/07/2026"
     assert "1 750 pompiers" in b["resume"]
     assert {s["hote"] for s in b["sources"]} == {"sudouest.fr", "france3-regions.franceinfo.fr"}
-    assert "Bulletins de veille presse" in page
+    assert "Veille presse sur l'incendie" in page
     assert "Veille presse — à vérifier" in page
     assert 'rel="nofollow noopener"' in page
     assert ">sudouest.fr</a>" in page
@@ -191,7 +191,7 @@ def test_bulletins_absents_si_aucun(saumos_archive):
     ctx = load_fire_context(conn, config, saumos_id)
     ctx["bulletins"], ctx["bulletins_repli"] = [], None
     page = render_feu(make_env(config["generate"]["templates_dir"]), ctx)
-    assert "Bulletins de veille presse" not in page
+    assert "Veille presse sur l'incendie" not in page
 
 
 def test_aucun_horodatage_de_generation(html):

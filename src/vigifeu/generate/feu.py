@@ -172,6 +172,26 @@ def _nom_et_dept(public_id, relations):
     return lieu, dept, annee
 
 
+def _nom_seo(lieu, dept):
+    """« Feu de {lieu} (Gironde) » — comme le nom d'en-tête mais département NOMMÉ.
+    Sert au <title> et à la meta description (SEO : « incendie Gironde », pas « 33 »)."""
+    dept_nom = fr.nom_departement(dept) if dept else None
+    return f"Feu de {lieu}" + (f" ({dept_nom})" if dept_nom else "")
+
+
+def _meta_description(nom_seo, fire):
+    """Meta description dédiée (Spec 04) — découplée de la synthèse, donc STABLE quel que
+    soit le cycle de vie et porteuse des mots-clés (feu, incendie, végétation, commune,
+    département). Le suffixe « Épisode suivi du… » n'apparaît que pour un feu terminé : ce
+    sont des dates de DONNÉE (first/last acq), pas une heure de génération (§9.5)."""
+    base = (f"{nom_seo} : suivi satellite de l'incendie de végétation, "
+            "communes concernées, chronologie et intensité thermique.")
+    if fire["lifecycle"] != "actif" and fire["first_acq_at"] and fire["last_acq_at"]:
+        base += (f" Épisode suivi du {fr.date_fr(fire['first_acq_at'])} "
+                 f"au {fr.date_fr(fire['last_acq_at'])}.")
+    return base
+
+
 def _secheresse_meteo_forets(conn, config, dept):
     """Phrase du danger Météo des forêts pour le département du feu (dernier connu).
 
@@ -444,7 +464,8 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
 
     gen = config["generate"]
     canonical_path = f"/feux/{fire['public_id']}/"
-    description = synthese[0] if synthese else nom
+    nom_seo = _nom_seo(lieu, dept)
+    description = _meta_description(nom_seo, fire)
 
     lat = lon = None
     if latest and latest["geometry_wkt"]:
@@ -467,7 +488,7 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
         "og_image": og.og_path(dept),
         "jsonld": graph,
         "indicateurs": indicateurs,
-        "page_title": f"{nom} — suivi satellite, communes concernées | {gen['marque']}",
+        "page_title": f"{nom_seo} — incendie de végétation, suivi satellite | {gen['marque']}",
         "page_description": description,
         "fil_ariane": [
             {"label": "Accueil", "href": "/"},

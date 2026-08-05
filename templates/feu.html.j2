@@ -80,7 +80,7 @@
 {# 3.4 Communes concernées — paliers proches ouverts, paliers lointains repliés #}
 {% if communes_groupes or communes_groupes_eloignes %}
 <section class="communes">
-<h2>Communes concernées</h2>
+<h2>Communes concernées par le feu</h2>
 {% macro groupe_rel(groupe) %}
 <div class="groupe-rel">
 <h3>{{ groupe.titre }}</h3>
@@ -110,7 +110,7 @@
    d'absence sans référentiel — P6). #}
 {% if enjeux_poi or not enjeux_indispo %}
 <section class="enjeux">
-<h2>Enjeux sensibles à proximité</h2>
+<h2>Enjeux sensibles à proximité du feu</h2>
 {% if enjeux_poi %}
 {% for p in enjeux_poi %}
 <p{% if p.zone %} class="en-zone"{% endif %}>{{ p.texte }}.</p>
@@ -126,7 +126,7 @@
    EXEMPTÉE du lint lexique (elle cite la presse, pas une affirmation Vigifeu — §0/§10). #}
 {% if bulletins %}
 <section class="bulletins">
-<h2>Bulletins de veille presse</h2>
+<h2>Veille presse sur l'incendie</h2>
 <p class="note lignee-presse">{{ bulletins_reserve }}</p>
 {% macro carte_bulletin(b) %}
 <article class="bulletin">
@@ -166,7 +166,7 @@
 {# 3.5 Chronologie + 3.6 intensité par passage — antichronologique, jour/nuit distingués #}
 {% if chronologie %}
 <section class="chronologie">
-<h2>Chronologie des passages</h2>
+<h2>Chronologie de l'incendie</h2>
 {% macro lignes_chrono(lignes) %}
 {% for l in lignes %}
 <tr><td>{{ l.at }}</td><td>{{ l.type }}</td><td>{{ l.n_hotspots }}</td>
@@ -207,7 +207,7 @@
 
 {# 3.8 Contexte sécheresse — mode dégradé tant que la source n'est pas armée (P6) #}
 <section class="secheresse">
-<h2>Contexte sécheresse</h2>
+<h2>Sécheresse et risque d'incendie</h2>
 {% if secheresse_meteo_forets %}<p>{{ secheresse_meteo_forets }}.</p>{% endif %}
 {% if secheresse_indispo %}
 <p class="indispo">Contexte sécheresse momentanément indisponible (source en cours d'intégration).</p>
