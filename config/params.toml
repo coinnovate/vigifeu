@@ -218,6 +218,19 @@ chrono_repli_visible = 12
 bulletins_repli_seuil = 8
 bulletins_repli_visible = 6
 
+# PWA « installable safe » (cadrage PWA). Présence de cette section = le site émet le
+# manifest, le service worker et les balises (lien manifest, theme-color) sur toutes les
+# pages. La retirer suffit à revenir à un statique nginx ordinaire (le SW se désinstalle
+# de lui-même à la prochaine visite, faute de /sw.js — voir deploy/nginx-sentifeu.conf).
+# Le service worker ne met JAMAIS en cache les fiches de feux ni les GeoJSON : seule la
+# présentation (CSS/JS/icônes) est précachée — la fraîcheur des détections prime (P0).
+[pwa]
+name = "Sentifeu — veille des feux de végétation"
+short_name = "Sentifeu"
+description = "Veille satellitaire des incendies de végétation en France : feux détectés, cartes et fiches datées et sourcées."
+theme_color = "#1b2a4a"        # marine du bandeau (cohérent avec --marine du CSS)
+background_color = "#ffffff"   # fond de l'écran de démarrage (papier)
+
 [imagerie]
 # Spec 06 §5 — cran 2 : calque Sentinel-2 10 m (fausse-couleur SWIR « brûlure ») via CDSE
 # Sentinel Hub WMS, daté sur la fenêtre du feu (mostRecent peu nuageux). 25× plus fin que le

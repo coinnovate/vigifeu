@@ -1,0 +1,10 @@
+{% extends "base.html.j2" %}
+{% block content %}
+<article class="page erreur">
+<h1>Hors ligne</h1>
+<p>Votre appareil n'est pas connecté. {{ marque }} affiche des détections satellitaires
+qui évoluent en continu : pour éviter de vous montrer des informations périmées, les
+fiches de feux ne sont pas mises en cache et ne sont consultables qu'en ligne.</p>
+<p>Rétablissez la connexion puis <a href="/">rouvrez la carte nationale</a>.</p>
+</article>
+{% endblock %}

@@ -14,7 +14,12 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
 
-def make_env(templates_dir: str | Path, *, analytics: dict | None = None) -> Environment:
+def make_env(
+    templates_dir: str | Path,
+    *,
+    analytics: dict | None = None,
+    pwa: dict | None = None,
+) -> Environment:
     env = Environment(
         loader=FileSystemLoader(str(templates_dir)),
         autoescape=select_autoescape(["html", "xml"]),
@@ -26,4 +31,8 @@ def make_env(templates_dir: str | Path, *, analytics: dict | None = None) -> Env
     # Mesure d'audience (Umami, sans cookie) injectée dans toutes les pages via le gabarit
     # de base. Global (pas dans chaque contexte de page). Vide {} = aucun script émis.
     env.globals["analytics"] = analytics or {}
+    # Métadonnées PWA (lien manifest, theme-color, enregistrement du service worker)
+    # posées sur toutes les pages via le gabarit de base. Global, comme analytics : vide
+    # {} = aucune balise PWA émise (le site reste un statique nginx ordinaire).
+    env.globals["pwa"] = pwa or {}
     return env

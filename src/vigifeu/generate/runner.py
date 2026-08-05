@@ -28,6 +28,7 @@ from vigifeu.generate.geojson import feu_geojson, national_geojson
 from vigifeu.generate.og import write_og_images
 from vigifeu.generate.pages import build_static_pages
 from vigifeu.generate.publish import ensure_public_id
+from vigifeu.generate.pwa import build_pwa
 from vigifeu.generate.sitemaps import (
     build_atom,
     build_redirects,
@@ -101,7 +102,8 @@ def sync_static(config: dict) -> None:
 def finalize_site(conn: sqlite3.Connection, config: dict, env: Environment | None = None) -> dict:
     """Artefacts « site-level » (Spec 04 §3, passe nocturne) : pages éditoriales, sitemaps,
     robots, llms.txt, flux Atom, redirections 301. Régénérés en fin de build."""
-    env = env or make_env(config["generate"]["templates_dir"], analytics=config.get("analytics"))
+    env = env or make_env(config["generate"]["templates_dir"], analytics=config.get("analytics"),
+                          pwa=config.get("pwa"))
     # La carte (accueil) est un agrégat : on la régénère systématiquement ici pour qu'elle
     # ne reste jamais périmée quand la file ne la ré-enfile pas (déploiement, archivage).
     write_carte(conn, config, env, config["generate"]["site_dir"])
@@ -110,6 +112,7 @@ def finalize_site(conn: sqlite3.Connection, config: dict, env: Environment | Non
         "departements": build_departements(conn, config, env),
         "sitemaps": build_sitemaps(conn, config),
         "redirects": build_redirects(conn, config),
+        "pwa": build_pwa(config, env),
     }
     write_robots(config)
     write_llms(config)
@@ -155,7 +158,8 @@ def consume(conn: sqlite3.Connection, config: dict, *, stamp: str,
     type n'est pas encore câblé reste en file (comptée `differe`). Une erreur de rendu
     est isolée (comptée `erreurs`, tracée sur stderr) et ne bloque pas le lot.
     """
-    env = env or make_env(config["generate"]["templates_dir"], analytics=config.get("analytics"))
+    env = env or make_env(config["generate"]["templates_dir"], analytics=config.get("analytics"),
+                          pwa=config.get("pwa"))
     site_dir = config["generate"]["site_dir"]
     sql = "SELECT id, page_type, page_ref FROM regen_queue WHERE processed_at IS NULL ORDER BY id"
     if limit:

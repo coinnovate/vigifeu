@@ -14,6 +14,9 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+{% if pwa %}<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="{{ pwa.theme_color }}">
+<meta name="mobile-web-app-capable" content="yes">{% endif %}
 <meta property="og:site_name" content="{{ marque }}">
 <meta property="og:type" content="website">
 <meta property="og:title" content="{{ page_title }}">
@@ -45,5 +48,6 @@
 </main>
 {% include "_footer.html.j2" %}
 {% block scripts %}{% endblock %}
+{% if pwa %}<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){});});}</script>{% endif %}
 </body>
 </html>
