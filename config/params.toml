@@ -381,7 +381,11 @@ retry_wait_max_s = 60
 # validés en prod (comme drought/bulletins). Identifiants OAuth2 en ENVIRONNEMENT (EUMETSAT_CONSUMER_KEY/
 # EUMETSAT_CONSUMER_SECRET), jamais ici. Le hash de config N'inclut PAS [mtg] : ce flux ne décide ni du
 # clustering ni de la qualification VIIRS (étanchéité, Spec 07 §0/§6).
-activated = true
+# Repli (2026-08-06) : réactivé une fois `fire_classes`/anti-glint calibrés sur Saumos. En prod, le
+# 0682 avec fire_classes=[1,2,3] ramassait du glint côtier de midi (bande latitude constante Côte
+# d'Azur) et ratait les feux compacts intenses (Piémont 31 MW, Crau 19 MW) → bruit en « signaux en
+# attente ». On éteint le temps de resserrer le filtre de détection (Spec 07 §10/§12.2).
+activated = false
 collection_id = "EO:EUM:DAT:0682"
 token_url = "https://api.eumetsat.int/token"
 data_url = "https://api.eumetsat.int/data"       # base Data Store (VÉRIFIÉ live)
