@@ -114,9 +114,32 @@ def _telecharger(token: str, href: str) -> str:
     return path
 
 
+def _extract_nc(path: str) -> str:
+    """Le Data Store livre un ZIP (SIP) contenant le netCDF + métadonnées. On en extrait le .nc."""
+    import zipfile
+
+    with open(path, "rb") as fh:
+        magic = fh.read(4)
+    if magic[:4] == b"\x89HDF" or magic[:3] == b"CDF":
+        return path  # déjà un netCDF brut
+    if magic[:2] == b"PK":
+        with zipfile.ZipFile(path) as z:
+            ncs = [n for n in z.namelist() if n.lower().endswith(".nc")]
+            print("      Archive ZIP (SIP) — entrées :", z.namelist())
+            print("      → fichier(s) .nc :", ncs)
+            if not ncs:
+                sys.exit("ERREUR : aucun .nc dans l'archive SIP.")
+            out = os.path.join(tempfile.gettempdir(), os.path.basename(ncs[0]))
+            with z.open(ncs[0]) as src, open(out, "wb") as dst:
+                dst.write(src.read())
+            return out
+    sys.exit(f"ERREUR : format inconnu (magic={magic!r}).")
+
+
 def _dump_netcdf(path: str) -> None:
     import netCDF4  # import tardif : n'échoue que si on va jusqu'au dump
 
+    path = _extract_nc(path)
     print("\n[4/4] Structure netCDF (groupes + variables) :")
     ds = netCDF4.Dataset(path, "r")
     try:
