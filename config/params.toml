@@ -394,6 +394,9 @@ fetch_interval_min = 15
 # resolution_m = empreinte pixel à la latitude France : taille du carré affiché + rayon de regroupement des
 # détections d'un même slot (PAS une dédup inter-satellites).
 resolution_m = 2000
+# catchup_hours = borne du 1er rattrapage quand aucun run réussi n'existe encore (sinon on partirait du néant).
+# Ensuite la fenêtre part du `until` du dernier run réussi (rattrape TOUS les granules depuis, Spec 07 §2).
+catchup_hours = 2
 provider = "mtg-fci-fir"
 attribution = "Contains modified EUMETSAT Meteosat FCI data 2026"   # source unique de vérité (Spec 07 §3)
 timeout_s = 180
