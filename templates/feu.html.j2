@@ -196,6 +196,22 @@
 <p class="note">Les passages de nuit et de jour ne sont pas comparables entre eux (sensibilité du capteur).</p>
 </section>
 {% endif %}
+{% if mtg %}
+{# Évolution vue par le satellite géostationnaire (MTG, Spec 07 §7) — tendance RELATIVE + fraîcheur,
+   jamais un chiffre comparable à la puissance thermique VIIRS. Section absente sans détection MTG. #}
+<section class="mtg-evolution">
+<h2>Évolution vue par le satellite géostationnaire</h2>
+<p class="note lignee-mtg">{{ mtg.note }}</p>
+<p class="mtg-fraicheur">{{ mtg.fraicheur }}</p>
+{% if mtg.tendance %}
+<p class="mtg-tendance">{{ mtg.tendance }}</p>
+<div class="frise-mtg" role="img" aria-label="{{ mtg.tendance }}">{% for b in mtg.bars %}<span class="barre" style="height:{{ b }}%"></span>{% endfor %}</div>
+{% else %}
+<p class="note mtg-degrade">{{ mtg.degrade }}</p>
+{% endif %}
+<p class="attribution mtg-attribution">{{ mtg.attribution }}</p>
+</section>
+{% endif %}
 
 {# 3.7 Météo #}
 {% if meteo_obs %}

@@ -433,6 +433,69 @@ def _bulletins_ctx(conn, config, event_id):
     return {"bulletins": bulletins, "bulletins_repli": repli, "bulletins_reserve": fr.note_bulletins()}
 
 
+def _mtg_sens(valeurs: list[float], margin_pct: float) -> str:
+    """« hausse » / « baisse » / « stable » en comparant la moyenne de la 2ᵉ moitié à la 1ʳᵉ.
+    La marge (bruit du géostationnaire) évite de qualifier une variation insignifiante."""
+    n = len(valeurs)
+    mid = n // 2
+    debut = valeurs[:mid] or valeurs[:1]
+    fin = valeurs[mid:] or valeurs[-1:]
+    m_debut = sum(debut) / len(debut)
+    m_fin = sum(fin) / len(fin)
+    if m_debut <= 0:
+        return "hausse" if m_fin > 0 else "stable"
+    ratio = m_fin / m_debut
+    marge = margin_pct / 100.0
+    if ratio >= 1 + marge:
+        return "hausse"
+    if ratio <= 1 - marge:
+        return "baisse"
+    return "stable"
+
+
+def _mtg_bars(valeurs: list[float], n_max: int = 24) -> list[int]:
+    """Hauteurs (%) d'une mini-frise CSS, normalisées au max ; plancher 6 % pour rester visible."""
+    vals = valeurs[-n_max:]
+    top = max(vals) or 1.0
+    return [max(6, round(100 * v / top)) for v in vals]
+
+
+def _mtg_ctx(conn, config, event_id) -> dict:
+    """Évolution géostationnaire (Spec 07 §7) : frise de tendance RELATIVE + fait de fraîcheur.
+
+    Bâtie sur les détections MTG **rattachées** au feu (`confirmed_by_fire_event_id`). L'intensité
+    par slot = somme des FRP des pixels d'un même instant (puissance totale à cet instant). Sous
+    `trend_min_points` slots : dégradé honnête (pas de tendance). Section absente sans détection.
+    La FRP MTG n'est JAMAIS versée dans le chiffre VIIRS (§6) : ici seulement une tendance relative.
+    """
+    rows = conn.execute(
+        "SELECT acq_at, frp_mw FROM geo_detection_raw WHERE confirmed_by_fire_event_id=? ORDER BY acq_at",
+        (event_id,),
+    ).fetchall()
+    if not rows:
+        return {"mtg": None}
+    par_slot: dict[str, float] = {}
+    for r in rows:
+        if r["frp_mw"] is not None:
+            par_slot[r["acq_at"]] = par_slot.get(r["acq_at"], 0.0) + r["frp_mw"]
+    valeurs = [par_slot[k] for k in sorted(par_slot)]
+    m = config["mtg"]
+    tendance = bars = degrade = None
+    if len(valeurs) >= m["trend_min_points"]:
+        tendance = fr.phrase_mtg_tendance(_mtg_sens(valeurs, m["trend_margin_pct"]))
+        bars = _mtg_bars(valeurs)
+    else:
+        degrade = fr.mtg_degrade()
+    return {"mtg": {
+        "fraicheur": fr.mtg_fraicheur(rows[0]["acq_at"]),
+        "note": fr.note_mtg(),
+        "tendance": tendance,
+        "bars": bars,
+        "degrade": degrade,
+        "attribution": m["attribution"],
+    }}
+
+
 def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> dict:
     fire = _fire_row(conn, event_id)
     relations = _relations(conn, event_id)
@@ -527,6 +590,10 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
         # Bulletins de veille presse (Spec 09) : lignée `declaree` attribuée, section absente
         # sans bulletin. Exemptée du lint lexique (elle cite la presse, §0/§10).
         **_bulletins_ctx(conn, config, event_id),
+        # Évolution géostationnaire MTG (Spec 07 §7) : frise de tendance RELATIVE + fait de fraîcheur,
+        # bâtie sur les détections MTG rattachées. Section absente sans détection ; dégradé honnête
+        # sous trend_min_points. Jamais un chiffre en MW comparable à VIIRS (§6).
+        **_mtg_ctx(conn, config, event_id),
         # Chronologie : liste complète (crawlable) ; `chrono_repli` = nb de passages récents
         # laissés visibles quand la liste dépasse le seuil (les plus anciens sont repliés), None
         # sinon. Le pic d'intensité étant déjà dans la synthèse, rien d'important n'est masqué.

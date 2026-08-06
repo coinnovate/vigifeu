@@ -493,6 +493,36 @@ def date_bulletin_fr(ymd: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# 2.5 — Évolution géostationnaire MTG (Spec 07 §7) — tendance RELATIVE, jamais #
+#        comparée à la puissance thermique VIIRS (§6, non commensurable).      #
+# --------------------------------------------------------------------------- #
+
+_MTG_SENS = {"hausse": "en hausse", "stable": "stable", "baisse": "en baisse"}
+
+
+def phrase_mtg_tendance(sens: str) -> str:
+    """Tendance relative d'intensité vue par le géostationnaire. `sens` ∈ hausse/stable/baisse."""
+    return f"Intensité vue par le satellite géostationnaire : {_MTG_SENS.get(sens, 'stable')} depuis le début du suivi."
+
+
+def mtg_fraicheur(premiere_vue: str) -> str:
+    """Fait de fraîcheur : première vue MTG + cadence (la valeur « axe temps » rendue visible)."""
+    return (f"Détecté aussi par satellite géostationnaire (MTG) : première vue le "
+            f"{horodatage(premiere_vue)}, cadence d'environ 10 minutes.")
+
+
+def note_mtg() -> str:
+    """Réserve de la section MTG : tendance relative, non comparable à la mesure VIIRS (§6)."""
+    return ("Tendance relative d'intensité issue du satellite géostationnaire — indicative, "
+            "non comparable à la puissance thermique mesurée par les satellites défilants.")
+
+
+def mtg_degrade() -> str:
+    """Dégradé honnête quand trop peu de vues MTG pour tracer une tendance (Spec 07 §7)."""
+    return "Pas encore assez de vues du satellite géostationnaire pour tracer une tendance."
+
+
+# --------------------------------------------------------------------------- #
 # 2.4 — Prévisions météorologiques (catégorie `prevue`)                       #
 # --------------------------------------------------------------------------- #
 

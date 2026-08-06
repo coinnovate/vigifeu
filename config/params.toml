@@ -409,8 +409,11 @@ confirm_radius_km = 3
 # Amorçage en geo_candidate (Spec 07 §4.2/§5) : détections persistantes dans le même rayon avant de créer un candidat.
 seed_min_detections = 3          # ~30 min de persistance à 10 min ; à caler sur Saumos
 seed_radius_km = 3
-# Frise de tendance (Spec 07 §7) — nb minimal de détections rattachées sous lequel on n'affiche PAS de tendance (dégradé honnête).
+# Frise de tendance (Spec 07 §7) — nb minimal de SLOTS rattachés sous lequel on n'affiche PAS de tendance (dégradé honnête).
 trend_min_points = 3
+# Marge (%) autour de laquelle la tendance est jugée « stable » (sinon hausse/baisse). Évite de qualifier
+# une variation dans le bruit du géostationnaire.
+trend_margin_pct = 15
 display_max_h = 24               # signal « en attente » retiré de l'AFFICHAGE au-delà (reste en base)
 # Anti-cri-au-loup (Spec 07 §8bis) — un signal n'est AFFICHÉ « en attente » que s'il est persistant et hors source fixe.
 display_min_detections = 2       # slots MTG distincts avant d'afficher un signal isolé (glint/artefact vu 1 fois = rien)
