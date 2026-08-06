@@ -150,7 +150,7 @@ def test_retention_config_presente(conn):
     assert "geo_detection_retention_days" in cfg["archive"]
     assert "mtg" in cfg
     assert cfg["mtg"]["collection_id"] == "EO:EUM:DAT:0682"
-    assert cfg["mtg"]["activated"] is False
+    assert isinstance(cfg["mtg"]["activated"], bool)   # présent (activé en prod le 2026-08-06)
 
 
 def test_mtg_hors_hash_config():

@@ -381,7 +381,7 @@ retry_wait_max_s = 60
 # validés en prod (comme drought/bulletins). Identifiants OAuth2 en ENVIRONNEMENT (EUMETSAT_CONSUMER_KEY/
 # EUMETSAT_CONSUMER_SECRET), jamais ici. Le hash de config N'inclut PAS [mtg] : ce flux ne décide ni du
 # clustering ni de la qualification VIIRS (étanchéité, Spec 07 §0/§6).
-activated = false
+activated = true
 collection_id = "EO:EUM:DAT:0682"
 token_url = "https://api.eumetsat.int/token"
 data_url = "https://api.eumetsat.int/data"       # base Data Store (VÉRIFIÉ live)
