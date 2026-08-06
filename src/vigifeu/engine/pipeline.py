@@ -130,6 +130,12 @@ def reset_interpretation(conn: sqlite3.Connection, config: dict) -> None:
         # Observations conservées : on ne coupe que leur lien vers l'interprétation effacée.
         conn.execute("UPDATE hotspot_raw SET fire_event_id=NULL, fixed_source_id=NULL")
         conn.execute("UPDATE geo_detection_raw SET confirmed_by_fire_event_id=NULL")
+        # geo_candidate (Spec 07 §5) : on détache la confirmation vers le feu supprimé (sinon
+        # foreign_key_check sort une orpheline), sans jeter le groupement MTG (dérivé des détections,
+        # pas de VIIRS) — un candidat promu redevient `en_attente`, re-promu à la ré-interprétation.
+        conn.execute(
+            "UPDATE geo_candidate SET status='en_attente', fire_event_id=NULL WHERE fire_event_id IS NOT NULL"
+        )
         # Interprétation + dérivées d'un feu (la météo a fire_event_id NOT NULL donc n'est
         # pas NULLable → supprimée ; elle sera rééchantillonnée au prochain cycle).
         conn.execute("DELETE FROM weather_forecast WHERE fire_event_id IS NOT NULL")
