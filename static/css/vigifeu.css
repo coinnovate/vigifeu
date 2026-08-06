@@ -108,6 +108,16 @@ h2 { font-size: 1.15rem; margin: 1.6rem 0 .5rem; color: var(--marine); border-bo
 .bulletin .sources { font-size: .82rem; color: var(--gris); margin: .35rem 0 0; }
 .bulletins-anciens > summary { cursor: pointer; color: var(--marine); margin: .5rem 0; }
 
+/* Évolution géostationnaire MTG (Spec 07 §7) — tendance RELATIVE, teinte neutre (jamais l'orange
+   d'intensité VIIRS : ce n'est pas la même mesure). La frise est une mini-visualisation de rythme,
+   pas une échelle chiffrée. */
+.mtg-evolution { margin: 1.4rem 0; }
+.mtg-fraicheur { margin: .3rem 0; }
+.mtg-tendance { font-weight: 600; color: var(--marine); margin: .4rem 0 .3rem; }
+.frise-mtg { display: flex; align-items: flex-end; gap: 3px; height: 48px; margin: .3rem 0 .5rem; }
+.frise-mtg .barre { flex: 1 1 0; min-width: 3px; background: var(--marine-clair); border-radius: 2px 2px 0 0; opacity: .8; }
+.mtg-attribution { font-size: .8rem; color: var(--gris); margin: .3rem 0 0; }
+
 table { border-collapse: collapse; width: 100%; font-size: .9rem; margin: .5rem 0; display: block; overflow-x: auto; }
 th, td { text-align: left; padding: .35rem .6rem; border-bottom: 1px solid var(--trait); white-space: nowrap; }
 
