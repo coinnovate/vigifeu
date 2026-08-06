@@ -11,6 +11,7 @@ dependencies = [
     "shapely>=2.0",    # géométrie du moteur (hull, aire, intersections) — Lot 2, plan §1.1
     "pyproj>=3.6",     # projection Lambert-93 (EPSG:2154) pour distances/aires justes — Lot 2
     "jinja2>=3.1",     # gabarits du générateur statique — Lot 4, plan §1.1 / Spec 04 §2
+    "netcdf4>=1.6",    # parsing du netCDF MTG FCI L2 FIR (groupe ListProduct) — Spec 07 §2, phase 2
 ]
 
 [project.optional-dependencies]
