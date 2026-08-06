@@ -24,7 +24,7 @@ from vigifeu.generate.carte import load_carte_context, render_carte
 from vigifeu.generate.commune import load_commune_context, render_commune
 from vigifeu.generate.feu import load_fire_context, render_feu
 from vigifeu.generate.departement import build_departements
-from vigifeu.generate.geojson import feu_geojson, national_geojson
+from vigifeu.generate.geojson import feu_geojson, geo_signals_geojson, national_geojson
 from vigifeu.generate.og import write_og_images
 from vigifeu.generate.pages import build_static_pages
 from vigifeu.generate.publish import ensure_public_id
@@ -74,6 +74,9 @@ def write_carte(conn, config, env, site_dir) -> Path:
     path = write_atomic(page_path(site_dir, "carte", "carte"), render_carte(env, ctx))
     gj = json.dumps(national_geojson(conn, config), ensure_ascii=False)
     write_atomic(Path(site_dir) / "feux.geojson", gj)
+    # Calque « signaux géostationnaires en attente » (Spec 07 §8) — fichier SÉPARÉ, non cliquable.
+    sig = json.dumps(geo_signals_geojson(conn, config), ensure_ascii=False)
+    write_atomic(Path(site_dir) / "signaux.geojson", sig)
     return path
 
 

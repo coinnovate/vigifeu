@@ -244,6 +244,47 @@
       map.on("mouseleave", "feux", function () {
         map.getCanvas().style.cursor = ""; popup.remove();
       });
+
+      // Calque « signaux géostationnaires en attente » (Spec 07 §8) — carrés translucides
+      // dessinés SOUS les feux confirmés, teinte neutre (jamais le rouge d'alarme), NON
+      // cliquables (infobulle seule) et désactivables via la case #toggle-signaux.
+      var sigUrl = el.getAttribute("data-signals");
+      if (!sigUrl) return;
+      fetch(sigUrl).then(function (r) { return r.json(); }).then(function (sg) {
+        var toggle = document.getElementById("toggle-signaux");
+        if (!sg || !sg.features || !sg.features.length) {
+          if (toggle && toggle.parentElement) toggle.parentElement.hidden = true; // pas de signal → pas de case morte
+          return;
+        }
+        map.addSource("signaux", { type: "geojson", data: sg });
+        map.addLayer({
+          id: "signaux-fond", type: "fill", source: "signaux",
+          filter: ["==", ["get", "couche"], "signal_geo"],
+          paint: { "fill-color": "#64748b", "fill-opacity": 0.18 }
+        }, "feux");
+        map.addLayer({
+          id: "signaux-ligne", type: "line", source: "signaux",
+          filter: ["==", ["get", "couche"], "signal_geo"],
+          paint: { "line-color": "#64748b", "line-width": 1, "line-dasharray": [2, 2], "line-opacity": 0.7 }
+        }, "feux");
+        // Infobulle seule (non cliquable) : rappelle qu'un signal n'est pas un feu confirmé.
+        var spop = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
+        map.on("mouseenter", "signaux-fond", function (e) {
+          map.getCanvas().style.cursor = "help";
+          spop.setLngLat(e.lngLat).setText(e.features[0].properties.libelle).addTo(map);
+        });
+        map.on("mousemove", "signaux-fond", function (e) { spop.setLngLat(e.lngLat); });
+        map.on("mouseleave", "signaux-fond", function () {
+          map.getCanvas().style.cursor = ""; spop.remove();
+        });
+        if (toggle) {
+          toggle.addEventListener("change", function () {
+            var v = toggle.checked ? "visible" : "none";
+            map.setLayoutProperty("signaux-fond", "visibility", v);
+            map.setLayoutProperty("signaux-ligne", "visibility", v);
+          });
+        }
+      }).catch(function () { /* signaux absents : la carte reste fonctionnelle */ });
     });
   }
 

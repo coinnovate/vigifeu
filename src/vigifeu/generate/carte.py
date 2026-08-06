@@ -68,6 +68,10 @@ def load_carte_context(conn: sqlite3.Connection, config: dict) -> dict:
         "fil_ariane": [{"label": "Accueil", "href": None}],
         "feux": feux,
         "geojson_href": "/feux.geojson",
+        # Calque « signaux géostationnaires en attente » (Spec 07 §8) : fichier séparé, calque
+        # désactivable non cliquable (carte.js). Libellé de la case via le lexique.
+        "signaux_href": "/signaux.geojson",
+        "signaux_toggle": fr.toggle_signaux(),
         "latence_texte": fr.bloc_latence(derniere_obs) if derniere_obs else None,
         "attributions": fr.bloc_attributions(referentiel_millesime=gen["referentiel_millesime"]),
     }

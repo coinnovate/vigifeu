@@ -11,8 +11,9 @@
 <h1>Incendies de végétation en France</h1>
 <p>Suivi satellite en continu (NASA FIRMS). Sélectionnez un feu pour sa fiche détaillée.</p>
 
-<div class="carte" data-carte="national" data-geojson="{{ geojson_href }}" role="img"
+<div class="carte" data-carte="national" data-geojson="{{ geojson_href }}" data-signals="{{ signaux_href }}" role="img"
      aria-label="Carte des feux de végétation en cours en France ; liste complète ci-dessous"></div>
+<label class="toggle-signaux"><input type="checkbox" id="toggle-signaux" checked> {{ signaux_toggle }}</label>
 <noscript><p class="indispo">La carte interactive nécessite JavaScript. La liste des feux en cours ci-dessous est complète sans carte.</p></noscript>
 
 <section class="feux-en-cours">

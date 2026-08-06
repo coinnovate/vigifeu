@@ -162,7 +162,7 @@ th, td { text-align: left; padding: .35rem .6rem; border-bottom: 1px solid var(-
 .pastille.poi-emprise { background: var(--fond-doux); border: 2px solid #1a1a1a; }
 .legende-poi { margin-top: -.3rem; }
 /* Toggles de carte (enjeux POI, imagerie satellite) — sobres, sous la légende. */
-.toggle-poi, .toggle-imagerie { display: block; font-size: .85rem; color: var(--gris); margin: .3rem 0; cursor: pointer; }
+.toggle-poi, .toggle-imagerie, .toggle-signaux { display: block; font-size: .85rem; color: var(--gris); margin: .3rem 0; cursor: pointer; }
 .imagerie-note { font-size: .8rem; color: var(--gris); font-style: italic; margin: .3rem 0 .6rem; }
 .legende-cone { font-size: .8rem; color: var(--gris); font-style: italic; }
 

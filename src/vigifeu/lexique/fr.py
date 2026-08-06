@@ -522,6 +522,17 @@ def mtg_degrade() -> str:
     return "Pas encore assez de vues du satellite géostationnaire pour tracer une tendance."
 
 
+def signal_geo_libelle() -> str:
+    """Libellé IMPOSÉ d'un signal en attente sur la carte nationale (Spec 05 §2.7 / Spec 07 §8).
+    Jamais « feu » : c'est un signal non confirmé, sans fiche."""
+    return "Signal géostationnaire en attente de confirmation par satellite défilant"
+
+
+def toggle_signaux() -> str:
+    """Libellé de la case d'activation du calque « signaux en attente » (Spec 07 §8)."""
+    return "Afficher les signaux géostationnaires en attente (MTG)"
+
+
 # --------------------------------------------------------------------------- #
 # 2.4 — Prévisions météorologiques (catégorie `prevue`)                       #
 # --------------------------------------------------------------------------- #

@@ -8,6 +8,7 @@ Le GeoJSON est aussi l'export « données brutes » (§3.9) et l'amorce de l'API
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime, timedelta
 
 from shapely import wkt
 from shapely.geometry import Point, box, mapping
@@ -110,5 +111,80 @@ def national_geojson(conn: sqlite3.Connection, config: dict) -> dict:
                 "url": f"/feux/{r['public_id']}/",
             },
             "geometry": mapping(Point(c.x, c.y)),
+        })
+    return {"type": "FeatureCollection", "features": features}
+
+
+def _signaux_groupes(dets, proj, radius2):
+    """Groupement glouton des détections orphelines (même amas physique)."""
+    pool = {d["id"]: d for d in dets}
+    used: set = set()
+    groupes = []
+    for gid in list(pool):
+        if gid in used:
+            continue
+        gx, gy = proj[gid]
+        membres = [gid]
+        used.add(gid)
+        for oid in pool:
+            if oid in used:
+                continue
+            ox, oy = proj[oid]
+            if (ox - gx) ** 2 + (oy - gy) ** 2 <= radius2:
+                membres.append(oid)
+                used.add(oid)
+        groupes.append([pool[i] for i in membres])
+    return groupes
+
+
+def geo_signals_geojson(conn: sqlite3.Connection, config: dict, *, clock: datetime | None = None) -> dict:
+    """Calque « signaux géostationnaires en attente » (Spec 07 §8 + §8bis).
+
+    Détections MTG NON confirmées et RÉCENTES (< `display_max_h`), groupées spatialement, rendues en
+    carrés ~`resolution_m` translucides. Filtres anti-cri-au-loup : **persistance** (au moins
+    `display_min_detections` slots distincts) et **masquage des sources fixes CONFIRMÉES**
+    (`display_fixed_source_radius_m`). Jamais un `public_id`, jamais un feu : libellé imposé, non
+    cliquable (carte.js). Purement fonction de l'état courant + `clock` (injectable en test).
+    """
+    m = config["mtg"]
+    now = clock or datetime.now(UTC)
+    horizon = (now - timedelta(hours=m["display_max_h"])).strftime("%Y-%m-%dT%H:%M:%SZ")
+    dets = conn.execute(
+        "SELECT id, lat, lon, acq_at FROM geo_detection_raw "
+        "WHERE confirmed_by_fire_event_id IS NULL AND acq_at >= ?",
+        (horizon,),
+    ).fetchall()
+    if not dets:
+        return {"type": "FeatureCollection", "features": []}
+    proj = geo.project_rows([(d["id"], d["lat"], d["lon"]) for d in dets])
+    groupes = _signaux_groupes(dets, proj, (m["seed_radius_km"] * 1000.0) ** 2)
+
+    # Masquage : sources fixes CONFIRMÉES (torchères…), rayon propre à l'empreinte MTG (§8bis).
+    masques: list[tuple[float, float, float]] = []
+    if m.get("display_mask_fixed_source", True):
+        r2 = m["display_fixed_source_radius_m"] ** 2
+        for s in conn.execute("SELECT lat, lon FROM fixed_source WHERE status='confirme'"):
+            sx, sy = geo.project(s["lat"], s["lon"])
+            masques.append((sx, sy, r2))
+
+    min_slots = m["display_min_detections"]
+    grid = m["resolution_m"]
+    features = []
+    for g in groupes:
+        if len({d["acq_at"] for d in g}) < min_slots:      # persistance (anti glint/artefact 1 slot)
+            continue
+        clat = sum(d["lat"] for d in g) / len(g)
+        clon = sum(d["lon"] for d in g) / len(g)
+        cx, cy = geo.project(clat, clon)
+        if any((cx - mx) ** 2 + (cy - my) ** 2 <= mr2 for mx, my, mr2 in masques):  # source fixe
+            continue
+        features.append({
+            "type": "Feature",
+            "properties": {
+                "couche": "signal_geo",
+                "libelle": fr.signal_geo_libelle(),
+                "attribution": m["attribution"],
+            },
+            "geometry": mapping(_cell_square(clat, clon, grid)),
         })
     return {"type": "FeatureCollection", "features": features}
