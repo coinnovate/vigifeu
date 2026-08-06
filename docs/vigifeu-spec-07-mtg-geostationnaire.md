@@ -262,10 +262,10 @@ Sur la fiche d'un feu **confirmé** portant des détections MTG rattachées :
 une tendance ». Un feu sans aucune détection MTG rattachée ne montre simplement rien de MTG.
 
 **Déclenchement de la régénération.** Une fiche doit être régénérée quand de la donnée MTG s'y attache, **même
-sans nouveau hotspot VIIRS**. Signal de fraîcheur : le `last_acq_at` du feu (max de `geo_detection_raw`
-rattachées et de `geo_candidate.last_acq_at` promu). Génération par **vague dédiée** relisant les détections
-rattachées ; attribution EUMETSAT dans les composants (Spec 04 §29/§38). `OUVERT` (mineur) : lexique exact des
-paliers de tendance.
+sans nouveau hotspot VIIRS**. On **réutilise la `regen_queue` existante** (migration 002, Spec 04 §3, consommée
+par `generate/runner.py`) : le rattachement d'une détection enfile `page_type='feu'` (fiche du feu) et
+`page_type='carte'` (calque national pour un signal en attente) — **pas de nouvelle machinerie**. Attribution
+EUMETSAT dans les composants (Spec 04 §29/§38). `OUVERT` (mineur) : lexique exact des paliers de tendance.
 
 ---
 
@@ -348,7 +348,9 @@ une fixture MTG **propre** (nouveau dossier `tests/fixtures/mtg/…`), à figer 
    (`confirm_window_h`/`confirm_radius_km`). Tests des deux sens.
 6. **Amorçage via `geo_candidate` (D1)** : créer un candidat léger (`status='en_attente'`, jamais un
    `fire_event`) sur persistance MTG sans VIIRS ; promotion (`status='confirme'`, `fire_event_id`) à la
-   confirmation ; expiration au-delà de `t_reprise_days`. Tests des trois branches.
+   confirmation ; expiration au-delà de `t_reprise_days`. Tests des trois branches. ⚠️ **mettre à jour
+   `engine/pipeline.py` (wipe/regen)** pour aussi détacher `geo_candidate` (`fire_event_id`→NULL,
+   `status`→`en_attente`) lors du wipe des `fire_event`, sinon `foreign_key_check` sort une orpheline.
 7. **Enrichissement fiche (v1, D2)** : frise de tendance relative (dégradé sous `trend_min_points`) + fait de
    fraîcheur + attribution ; déclenchement de régén sur `last_acq_at` MTG ; vague dédiée. Tests de génération
    (dont le dégradé « pas assez de vues MTG »).
