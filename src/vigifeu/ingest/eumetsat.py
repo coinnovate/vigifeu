@@ -218,7 +218,7 @@ class EumetsatClient:
     def list_products(self, since: datetime, until: datetime) -> list[dict]:
         """Produits 0682 sur [since, until], triés chronologiquement (cf. parse_product_list)."""
         m = self._config["mtg"]
-        url = f"{m['data_url']}/search-products/os"  # ⚠️ à confirmer live (Spec 07 §12)
+        url = f"{m['data_url']}/{m['search_path']}"  # chemin versionné fiable (cf. [mtg].search_path)
         params = build_search_params(self._config, since, until)
         payload = _get_json(self._config, url, self.token(), params)
         return parse_product_list(payload)

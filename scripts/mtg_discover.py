@@ -34,8 +34,8 @@ BBOX = "-5.5,41.0,10.0,51.5"          # France métro + marge (= [general].firms
 # Endpoints de recherche CANDIDATS (on prend le premier qui répond 200) — c'est justement ce
 # qu'on cherche à confirmer. La forme OpenSearch du Data Store a varié selon les versions.
 SEARCH_CANDIDATS = [
+    f"{BASE}/data/search-products/1.0.0/os",   # versionné = fiable (le /os simple a 503 depuis le VPS)
     f"{BASE}/data/search-products/os",
-    f"{BASE}/data/search-products/1.0.0/os",
 ]
 
 

@@ -384,7 +384,11 @@ retry_wait_max_s = 60
 activated = false
 collection_id = "EO:EUM:DAT:0682"
 token_url = "https://api.eumetsat.int/token"
-data_url = "https://api.eumetsat.int/data"       # à confirmer contre l'API réelle (Spec 07 §12)
+data_url = "https://api.eumetsat.int/data"       # base Data Store (VÉRIFIÉ live)
+# Chemin de recherche : la variante VERSIONNÉE `1.0.0/os` est fiable ; la non-versionnée `/os` a
+# renvoyé 503 depuis le VPS (2026-08-06). On garde la versionnée. Le lien de TÉLÉCHARGEMENT, lui,
+# vient tel quel de la réponse (links.data[].href), pas de construction de chemin.
+search_path = "search-products/1.0.0/os"
 # bbox propre à MTG (clé distincte, initialisée = [general].firms_bbox mais libre de diverger : l'empreinte
 # géostationnaire pourrait justifier une marge différente).
 bbox = "-5.5,41.0,10.0,51.5"

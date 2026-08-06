@@ -141,7 +141,7 @@ def test_list_products_bout_en_bout(monkeypatch, config):
     produits = eumetsat.EumetsatClient(config).list_products(SINCE, UNTIL)
     assert len(produits) == 2
     assert vu["token"] == "tok"
-    assert vu["url"].endswith("/search-products/os")
+    assert vu["url"].endswith("/search-products/1.0.0/os")
     assert vu["params"]["pi"] == "EO:EUM:DAT:0682"
 
 
