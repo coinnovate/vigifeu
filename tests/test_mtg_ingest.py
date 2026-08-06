@@ -1,6 +1,6 @@
 """Tests du cycle d'ingestion MTG `fetch_mtg_fir` (Spec 07 §2/§4, étape 4).
 
-Réseau + netCDF simulés : un client factice (list_products/download) et `parse_listproduct`
+Réseau + netCDF simulés : un client factice (list_products/download) et `parse_fir`
 monkeypatché (le parsing est déjà couvert à l'étape 3). On couvre : ingestion de base + journal,
 idempotence, immuabilité de `ingested_at`, désactivation, non-blocage sur erreur de source,
 saut d'un granule illisible, et fenêtre repartant du dernier succès.
@@ -71,8 +71,8 @@ def config():
 
 @pytest.fixture(autouse=True)
 def _fake_parse(monkeypatch):
-    """parse_listproduct → pixels fixes selon les octets téléchargés (isolé du vrai netCDF)."""
-    monkeypatch.setattr(mtg, "parse_listproduct", lambda data, config, **kw: PIXELS.get(data, []))
+    """parse_fir → pixels fixes selon les octets téléchargés (isolé du vrai netCDF)."""
+    monkeypatch.setattr(mtg, "parse_fir", lambda data, config, **kw: PIXELS.get(data, []))
 
 
 def _rows(conn):

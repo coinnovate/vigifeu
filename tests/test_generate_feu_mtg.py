@@ -1,8 +1,7 @@
-"""Enrichissement MTG de la fiche feu (Spec 07 §7, étape 7).
+"""Enrichissement MTG de la fiche feu (Spec 07 §7, étape 7, révisé prod : pas de FRP).
 
-Feu minimal + détections MTG rattachées → frise de tendance relative + fait de fraîcheur +
-attribution EUMETSAT. Couvre : hausse/baisse, dégradé (trop peu de slots), section absente
-(aucune détection), et l'absence de FRP MW comparable à VIIRS (tendance relative seulement).
+Le 0682 est de la détection seule → la frise porte sur le NOMBRE DE PIXELS feu MTG par slot
+(proxy d'étendue). Couvre : expansion / repli, dégradé (trop peu de slots), section absente.
 """
 
 from __future__ import annotations
@@ -40,26 +39,29 @@ def _feu(conn):
     ).lastrowid
 
 
-def _det(conn, fid, acq_at, frp, *, lon=-1.0):
+def _slot(conn, fid, acq_at, n_pixels):
+    """Insère `n_pixels` détections MTG rattachées au feu pour un même instant (pixels distincts)."""
     run = conn.execute(
         "INSERT INTO ingestion_run (source, started_at) VALUES ('mtg:0682','2026-08-06T12:00:00Z')"
     ).lastrowid
-    conn.execute(
-        "INSERT INTO geo_detection_raw (provider, lat, lon, acq_at, ingested_at, ingestion_run_id, "
-        "frp_mw, confirmed_by_fire_event_id) VALUES ('mtg-fci-fir', 44.7, ?, ?, ?, ?, ?, ?)",
-        (lon, acq_at, "2026-08-06T12:00:05Z", run, frp, fid),
-    )
+    for i in range(n_pixels):
+        conn.execute(
+            "INSERT INTO geo_detection_raw (provider, lat, lon, acq_at, ingested_at, "
+            "ingestion_run_id, confidence, confirmed_by_fire_event_id) "
+            "VALUES ('mtg-fci-fir', 44.7, ?, ?, ?, ?, '3', ?)",
+            (-1.0 - i * 0.02, acq_at, "2026-08-06T12:00:05Z", run, fid),
+        )
     conn.commit()
 
 
-def test_frise_tendance_hausse(conn, config, env):
+def test_frise_expansion(conn, config, env):
     fid = _feu(conn)
-    for i, frp in enumerate([10.0, 20.0, 40.0, 80.0]):        # intensité croissante
-        _det(conn, fid, f"2026-08-06T11:{10 + i * 10:02d}:00Z", frp)
+    for i, n in enumerate([1, 2, 4]):                     # de plus en plus de pixels → expansion
+        _slot(conn, fid, f"2026-08-06T11:{10 + i * 10:02d}:00Z", n)
     ctx = load_fire_context(conn, config, fid)
     assert ctx["mtg"] is not None
-    assert "en hausse" in ctx["mtg"]["tendance"]
-    assert len(ctx["mtg"]["bars"]) == 4
+    assert "en expansion" in ctx["mtg"]["tendance"]
+    assert len(ctx["mtg"]["bars"]) == 3
     html = render_feu(env, ctx)
     assert "Évolution vue par le satellite géostationnaire" in html
     assert "première vue le" in html
@@ -67,24 +69,24 @@ def test_frise_tendance_hausse(conn, config, env):
     assert "frise-mtg" in html
 
 
-def test_tendance_baisse(conn, config, env):
+def test_frise_repli(conn, config, env):
     fid = _feu(conn)
-    for i, frp in enumerate([80.0, 40.0, 20.0, 10.0]):
-        _det(conn, fid, f"2026-08-06T11:{10 + i * 10:02d}:00Z", frp)
+    for i, n in enumerate([5, 2, 1]):                     # de moins en moins → repli
+        _slot(conn, fid, f"2026-08-06T11:{10 + i * 10:02d}:00Z", n)
     ctx = load_fire_context(conn, config, fid)
-    assert "en baisse" in ctx["mtg"]["tendance"]
+    assert "en repli" in ctx["mtg"]["tendance"]
 
 
 def test_degrade_trop_peu_de_slots(conn, config, env):
     fid = _feu(conn)
-    _det(conn, fid, "2026-08-06T11:10:00Z", 10.0)
-    _det(conn, fid, "2026-08-06T11:20:00Z", 20.0)              # 2 slots < trend_min_points=3
+    _slot(conn, fid, "2026-08-06T11:10:00Z", 3)
+    _slot(conn, fid, "2026-08-06T11:20:00Z", 3)           # 2 slots < trend_min_points=3
     ctx = load_fire_context(conn, config, fid)
     assert ctx["mtg"]["tendance"] is None
     assert ctx["mtg"]["degrade"]
     html = render_feu(env, ctx)
     assert "Pas encore assez de vues" in html
-    assert "frise-mtg" not in html                            # pas de frise en dégradé
+    assert "frise-mtg" not in html
 
 
 def test_section_absente_sans_detection(conn, config, env):
@@ -93,16 +95,3 @@ def test_section_absente_sans_detection(conn, config, env):
     assert ctx["mtg"] is None
     html = render_feu(env, ctx)
     assert "satellite géostationnaire" not in html
-
-
-def test_intensite_par_slot_somme(conn, config, env):
-    """Plusieurs pixels d'un même slot → somme (puissance totale à l'instant), pas doublon de slot."""
-    fid = _feu(conn)
-    _det(conn, fid, "2026-08-06T11:10:00Z", 5.0)
-    _det(conn, fid, "2026-08-06T11:10:00Z", 5.0, lon=-1.02)    # même slot, autre pixel
-    _det(conn, fid, "2026-08-06T11:20:00Z", 30.0)
-    _det(conn, fid, "2026-08-06T11:30:00Z", 60.0)
-    ctx = load_fire_context(conn, config, fid)
-    # 3 slots distincts (le doublon d'instant est sommé), tendance calculable
-    assert len(ctx["mtg"]["bars"]) == 3
-    assert "en hausse" in ctx["mtg"]["tendance"]

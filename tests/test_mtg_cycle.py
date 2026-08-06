@@ -59,7 +59,7 @@ def config():
 
 @pytest.fixture(autouse=True)
 def _fake_parse(monkeypatch):
-    monkeypatch.setattr(mtg, "parse_listproduct", lambda data, config, **kw: PIXELS.get(data, []))
+    monkeypatch.setattr(mtg, "parse_fir", lambda data, config, **kw: PIXELS.get(data, []))
 
 
 def _feu_viirs(conn):

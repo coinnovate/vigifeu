@@ -497,12 +497,13 @@ def date_bulletin_fr(ymd: str) -> str:
 #        comparée à la puissance thermique VIIRS (§6, non commensurable).      #
 # --------------------------------------------------------------------------- #
 
-_MTG_SENS = {"hausse": "en hausse", "stable": "stable", "baisse": "en baisse"}
+# Le 0682 est de la détection (pas de FRP) : la tendance porte sur l'ÉTENDUE (nb de pixels feu).
+_MTG_SENS = {"hausse": "en expansion", "stable": "stable", "baisse": "en repli"}
 
 
 def phrase_mtg_tendance(sens: str) -> str:
-    """Tendance relative d'intensité vue par le géostationnaire. `sens` ∈ hausse/stable/baisse."""
-    return f"Intensité vue par le satellite géostationnaire : {_MTG_SENS.get(sens, 'stable')} depuis le début du suivi."
+    """Tendance relative d'étendue vue par le géostationnaire. `sens` ∈ hausse/stable/baisse."""
+    return f"Étendue vue par le satellite géostationnaire : {_MTG_SENS.get(sens, 'stable')} depuis le début du suivi."
 
 
 def mtg_fraicheur(premiere_vue: str) -> str:
@@ -512,9 +513,9 @@ def mtg_fraicheur(premiere_vue: str) -> str:
 
 
 def note_mtg() -> str:
-    """Réserve de la section MTG : tendance relative, non comparable à la mesure VIIRS (§6)."""
-    return ("Tendance relative d'intensité issue du satellite géostationnaire — indicative, "
-            "non comparable à la puissance thermique mesurée par les satellites défilants.")
+    """Réserve de la section MTG : tendance relative d'étendue, non comparable à la mesure VIIRS (§6)."""
+    return ("Tendance relative du nombre de pixels feu vus par le satellite géostationnaire "
+            "(résolution ~2 km) — indicative, non comparable à la mesure des satellites défilants.")
 
 
 def mtg_degrade() -> str:

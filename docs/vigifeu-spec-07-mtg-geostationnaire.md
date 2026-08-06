@@ -48,9 +48,13 @@ temps, il ne fait pas de détection fine exhaustive.
 
 - **Produit : `EO:EUM:DAT:0682` — MTG FCI Level 2 « Active Fire Monitoring » (FIR).** Résolution ~1 km nadir,
   échantillonnage **10 min**, NRT sous ~30 min. Guide : *MTG FCI L2 FIR data guide* (user.eumetsat.int).
-- **Format netCDF-4**, deux groupes : `QualityProduct` (drapeaux qualité pleine trame) et **`ListProduct`**
-  (la **liste** des pixels feu détectés : **position, heure, FRP, incertitude, confiance**). La liste est
-  courte (pixels feu seulement) → on la filtre par bbox France en mémoire, pas de trame lourde à traiter.
+- **Format netCDF-4 — VÉRIFIÉ sur un granule réel (2026-08-06), révise l'hypothèse initiale.** Ce n'est
+  PAS une liste de pixels (`ListProduct`) mais une **grille pleine-disque 5568×5568 à 2 km** en **projection
+  géostationnaire à 0°** : `fire_result` [rows,cols] (classe de détection : 0 pas de feu ; 1/2/3 feu par
+  confiance croissante ; 4 hors-disque), `fire_probability` [0-1], `x`/`y` (angles de balayage, radians),
+  `mtg_geos_projection` (paramètres). **PAS de FRP** (cf. §3/§6). On sélectionne `fire_result ∈ {1,2,3}`, on
+  **déprojette** x,y → lon/lat (pyproj `+proj=geos`), on filtre par bbox France. Le produit est livré en
+  **archive SIP (ZIP)** dont on extrait le `.nc`.
 - **Accès : API du Data Store** (`api.eumetsat.int` / `data.eumetsat.int`, pull HTTPS). **Pas EUMETCast**
   (antenne). Un daemon tire le netCDF comme on tire déjà FIRMS.
 - **Complétude d'ingestion (P3).** Chaque cycle ingère **tous les granules produits depuis le dernier succès**
@@ -60,7 +64,7 @@ temps, il ne fait pas de détection fine exhaustive.
   §4.1) → rejouer un granule connu = no-op.
 - **Décision D3 (2026-08-06) — voie d'accès « style maison ».** `httpx` + `tenacity` sur le modèle de
   `ingest/firms.py` (pas la lib `eumdac`), token OAuth2 fait main, parsing netCDF via une lib **légère**
-  (`netCDF4`, lecture du seul groupe `ListProduct`) — **pas** `xarray`. Cohérent avec l'existant, dépendances
+  (`netCDF4`, lecture de la grille + déprojection geos, dézippage du SIP) — **pas** `xarray`. Cohérent, dépendances
   minimales.
 - **Auth : OAuth2 `client_credentials`.** `POST {token_url}` avec *consumer key/secret* → *bearer token*
   (~1 h), rafraîchi à l'expiration. Les identifiants sont des **secrets d'environnement**
@@ -74,9 +78,10 @@ temps, il ne fait pas de détection fine exhaustive.
 Réponse du User Service EUMETSAT reçue le **2026-08-06** :
 
 - **`EO:EUM:DAT:0682` (Active Fire) : Free & unrestricted, licence CC-BY-4.0.** **Utilisable en public
-  dès maintenant** — c'est le produit que nous ingérons. Son netCDF **porte déjà la FRP par pixel**
-  (groupe `ListProduct`) : la courbe de tendance de la fiche (§7) se construit **à partir du 0682 seul**,
-  produit public-légal.
+  dès maintenant** — c'est le produit que nous ingérons. ⚠️ **Correction (granule réel) : le 0682 ne porte
+  PAS de FRP** (contrairement à l'hypothèse initiale tirée d'un résumé de l'ATBD) — c'est de la **détection
+  seule** (`fire_result` + `fire_probability`). La frise de la fiche (§7) se base donc sur le **nombre de
+  pixels feu** rattachés au fil du temps (proxy d'étendue), et non sur une FRP.
 - ⚠️ **À ne pas confondre : le produit *Fire Radiative Power – MTG – 0°* autonome (LSA SAF, EUMETCast) est
   en statut *démonstration* → interdit en environnement opérationnel/public.** Nous **ne l'utilisons pas**.
   (S'il passe « operational », mêmes conditions gratuites — on pourra l'ajouter comme source de FRP affinée.)
@@ -84,7 +89,7 @@ Réponse du User Service EUMETSAT reçue le **2026-08-06** :
   la contrainte « MTG doit rester séparable du payant » (Spec 05 §2.3) n'est plus dictée par la licence, mais
   on la **conserve par architecture** (P2).
 - **Attribution EUMETSAT obligatoire.** Deux formulations proposées par EUMETSAT. Nous produisons un **dérivé**
-  (frise de tendance calculée à partir de la FRP) → forme « Contains modified ». **Chaîne unique de vérité :
+  (frise calculée à partir du nombre de pixels feu) → forme « Contains modified ». **Chaîne unique de vérité :
   `[mtg].attribution` (§4.2)**, reprise à l'identique dans les composants du site (Spec 04 §29/§38) :
   > « Contains modified EUMETSAT Meteosat FCI data 2026 »
   (la forme « This service is based on EUMETSAT Meteosat product 2026 » conviendrait pour un usage non modifié).
@@ -116,7 +121,7 @@ geo_detection_raw
   acq_at                    TEXT NOT NULL      -- ISO UTC — heure du slot 10 min (phénomène, P3-a)
   ingested_at               TEXT NOT NULL      -- ISO UTC — 1re apparition chez nous (P3-b, jamais réécrit)
   ingestion_run_id          INTEGER NOT NULL REFERENCES ingestion_run(id)
-  frp_mw                    REAL               -- FRP du 0682 (public-légal) — JAMAIS versée dans frp_max VIIRS
+  frp_mw                    REAL               -- toujours NULL (le 0682 n'a pas de FRP) ; réservé si un produit FRP opérationnel arrive
   frp_uncertainty_mw        REAL
   confidence                TEXT               -- valeur source brute (non normalisée)
   quality_flag              TEXT               -- issu de QualityProduct si exploité
@@ -234,10 +239,10 @@ VIIRS et MTG ne mesurent **pas la même FRP** (empreintes ~375 m vs ~2 km, algor
 différents) : valeurs **non commensurables**. Restent **VIIRS/MODIS uniquement** : `frp_max`, `frp_sum`, le
 chiffre « Puissance thermique (FRP) » de la fiche, les règles R1–R4, la comparabilité historique.
 
-La FRP du 0682 (`geo_detection_raw.frp_mw`) est **public-légale** (§3) mais sert **uniquement** à tracer une
-**tendance relative** MTG (§7) et à la calibration (§5, destin 3) — **jamais** un chiffre en MW présenté comme
-comparable à VIIRS, **jamais** versée dans `frp_max`/`fire_event_version`. Deux voies étiquetées, jamais un
-chiffre mélangé.
+**Le 0682 ne fournit AUCUNE FRP** (détection seule, §2/§3) : la question d'un chiffre de puissance MTG ne se
+pose donc même pas. Ce que MTG apporte à la fiche est une **tendance relative d'étendue** (nombre de pixels
+feu au fil du temps, §7) — indicative, jamais un chiffre comparable à VIIRS. `geo_detection_raw.frp_mw` reste
+NULL (réservé au cas où un produit FRP MTG opérationnel arriverait). Deux voies étiquetées, jamais mélangées.
 
 ---
 
@@ -249,8 +254,8 @@ visible en public. Seul le **calque MTG coloré sur la carte de la fiche** reste
 
 Sur la fiche d'un feu **confirmé** portant des détections MTG rattachées :
 
-- une **courbe / mini-frise d'évolution** en **tendance relative** (« monte / se maintient / décline »),
-  construite à partir de `geo_detection_raw.frp_mw` des détections rattachées, **attribuée EUMETSAT** ;
+- une **mini-frise d'évolution** en **tendance relative** (« en expansion / stable / en repli »), construite
+  à partir du **nombre de pixels feu MTG par slot** (le 0682 n'a pas de FRP, §6), **attribuée EUMETSAT** ;
   **jamais** un axe en MW comparable à la mesure VIIRS ;
 - un **fait de fraîcheur** : « détecté aussi par satellite géostationnaire (MTG), 1ʳᵉ vue {HH:MM UTC},
   cadence ~10 min » — c'est la valeur latence rendue visible ;
@@ -338,8 +343,9 @@ une fixture MTG **propre** (nouveau dossier `tests/fixtures/mtg/…`), à figer 
    le modèle `test_migration_006`).
 2. **Accès Data Store** : module OAuth2 (`token`, cache/refresh) + client de listing/téléchargement 0682, en
    `httpx`+`tenacity`. Creds en env. Test avec réponses simulées.
-3. **Parsing netCDF `ListProduct`** : extraction (lat, lon, acq_at, frp, confiance) filtrée bbox, via `netCDF4`
-   sur un fichier fixture. Ajout de la dépendance à `pyproject.toml`.
+3. **Parsing netCDF (grille geos)** : dézippage du SIP, sélection `fire_result ∈ fire_classes`, déprojection
+   x,y → lat/lon (pyproj geos), filtrage bbox → (lat, lon, acq_at, classe, probabilité). Fixture synthétique.
+   Dépendance `netCDF4` (pyproj déjà présent).
 4. **`ingest/mtg.py` — `fetch_mtg_fir`** : cycle idempotent (`INSERT OR IGNORE`, `ingested_at` posé au neuf),
    **rattrapage de tous les granules depuis le dernier succès** (§2), journalisé dans `ingestion_run`. Tests
    d'idempotence, d'immuabilité de `ingested_at`, et de non-perte de slots.
@@ -369,10 +375,13 @@ une fixture MTG **propre** (nouveau dossier `tests/fixtures/mtg/…`), à figer 
 
 ## 12. Questions ouvertes résiduelles
 
-1. **URL exactes du Data Store** (`data_url`, endpoints de listing/download du 0682) — à confirmer à l'étape 2
-   contre l'API réelle (ne pas coder sur hypothèse).
-2. **Noms de variables netCDF** du groupe `ListProduct` (FRP, confiance, heure) — à relever sur un fichier réel
-   (étape 3).
-3. **`seed_min_detections` et paliers de tendance** — à caler empiriquement sur Saumos (§10).
+1. ✅ **RÉSOLU (2026-08-06, granule réel)** — endpoint de recherche `…/data/search-products/os`, téléchargement
+   en **SIP (ZIP)**, produit = **grille géostationnaire** (`fire_result`/`fire_probability`, x/y radians), **pas
+   de FRP**. Config `[mtg]`/`[mtg.netcdf]` calée en conséquence, parsing réécrit (déprojection geos + dézippage).
+2. **Classes de `fire_result` = « feu »** : retenu `{1,2,3}` (le fichier n'a pas de `flag_meanings`) — **à
+   confirmer sur Saumos** (§10) contre le déroulé VIIRS connu. Ajustable via `[mtg.netcdf].fire_classes`.
+3. **`seed_min_detections` et marge de tendance** — à caler empiriquement sur Saumos (§10).
 4. **Promotion candidat MTG → feu public** : au-delà de « confirmation VIIRS », faut-il d'autres corroborations
    (bulletin presse Spec 09, contribution photo Spec 10) ? — à trancher quand l'amorçage tourne.
+5. **Fixture MTG réelle** : figer un granule 0682 réel dans `tests/fixtures/mtg/` (le `scripts/mtg_discover.py`
+   en télécharge un) pour un test d'intégration bout-en-bout, en complément des fixtures synthétiques.

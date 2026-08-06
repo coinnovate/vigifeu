@@ -421,17 +421,17 @@ display_mask_fixed_source = true # masque les signaux dans le rayon d'une source
 display_fixed_source_radius_m = 2500  # rayon de masquage adapté à l'empreinte MTG ~2 km (≠ [fixed_source].mark_radius_m, calé VIIRS 375 m)
 
 [mtg.netcdf]
-# Groupe et noms de variables du netCDF « ListProduct » (Spec 07 §2, étape 3). ⚠️ À CONFIRMER sur un
-# fichier 0682 réel (Spec 07 §12 point 2) : ces noms sont des HYPOTHÈSES. Chaque entrée est une LISTE de
-# candidats — le parser prend la 1re variable présente (tolérant aux noms réels encore inconnus). Corriger
-# ici (config, jamais en dur) le jour où on a un vrai fichier suffit.
-group = "ListProduct"
-lat = ["latitude", "fire_latitude", "lat"]
-lon = ["longitude", "fire_longitude", "lon"]
-time = ["time", "detection_time", "acquisition_time"]
-frp = ["fire_radiative_power", "frp"]
-frp_uncertainty = ["fire_radiative_power_uncertainty", "frp_uncertainty"]
-confidence = ["confidence", "fire_confidence", "quality_flag"]
+# Variables du netCDF FIR 0682 — VÉRIFIÉES sur un granule réel (2026-08-06). Le produit est une GRILLE
+# pleine-disque en projection géostationnaire (pas une liste de pixels, pas de FRP — Spec 07 §2/§6).
+proj = "mtg_geos_projection"     # variable porteuse des paramètres de projection (grid_mapping CF)
+x = "x"                          # angle de balayage colonne (radians, auto-échelonné par netCDF4)
+y = "y"                          # angle de balayage ligne (radians)
+fire_result = "fire_result"      # classe de détection par pixel (int8)
+probability = "fire_probability" # probabilité 0-1 (conservée dans raw_payload)
+# Classes de `fire_result` considérées comme « feu ». Observé : 0 = pas de feu, 1/2/3 = feu (confiance
+# croissante), 4 = hors-disque/non traité. ⚠️ pas de flag_meanings dans le fichier → À CONFIRMER sur Saumos.
+fire_classes = [1, 2, 3]
+time_attr = "time_coverage_start"  # attribut global YYYYMMDDHHMMSS = heure du slot
 
 [firms]
 # https://firms.modaps.eosdis.nasa.gov/api/area/

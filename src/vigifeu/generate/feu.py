@@ -463,22 +463,21 @@ def _mtg_bars(valeurs: list[float], n_max: int = 24) -> list[int]:
 def _mtg_ctx(conn, config, event_id) -> dict:
     """Évolution géostationnaire (Spec 07 §7) : frise de tendance RELATIVE + fait de fraîcheur.
 
-    Bâtie sur les détections MTG **rattachées** au feu (`confirmed_by_fire_event_id`). L'intensité
-    par slot = somme des FRP des pixels d'un même instant (puissance totale à cet instant). Sous
-    `trend_min_points` slots : dégradé honnête (pas de tendance). Section absente sans détection.
-    La FRP MTG n'est JAMAIS versée dans le chiffre VIIRS (§6) : ici seulement une tendance relative.
+    Bâtie sur les détections MTG **rattachées** au feu (`confirmed_by_fire_event_id`). Le 0682 ne
+    porte PAS de FRP (§6) : la tendance est le **nombre de pixels feu MTG par slot** au fil du temps
+    (proxy d'étendue — en expansion / stable / en repli). Sous `trend_min_points` slots : dégradé
+    honnête. Section absente sans détection. Jamais un chiffre comparable à la mesure VIIRS.
     """
     rows = conn.execute(
-        "SELECT acq_at, frp_mw FROM geo_detection_raw WHERE confirmed_by_fire_event_id=? ORDER BY acq_at",
+        "SELECT acq_at FROM geo_detection_raw WHERE confirmed_by_fire_event_id=? ORDER BY acq_at",
         (event_id,),
     ).fetchall()
     if not rows:
         return {"mtg": None}
-    par_slot: dict[str, float] = {}
+    par_slot: dict[str, int] = {}
     for r in rows:
-        if r["frp_mw"] is not None:
-            par_slot[r["acq_at"]] = par_slot.get(r["acq_at"], 0.0) + r["frp_mw"]
-    valeurs = [par_slot[k] for k in sorted(par_slot)]
+        par_slot[r["acq_at"]] = par_slot.get(r["acq_at"], 0) + 1   # nb de pixels feu à cet instant
+    valeurs = [float(par_slot[k]) for k in sorted(par_slot)]
     m = config["mtg"]
     tendance = bars = degrade = None
     if len(valeurs) >= m["trend_min_points"]:

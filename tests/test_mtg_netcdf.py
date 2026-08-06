@@ -1,25 +1,33 @@
-"""Tests du parsing netCDF ListProduct (Spec 07 §2, étape 3).
+"""Parsing du netCDF FIR 0682 — grille géostationnaire (Spec 07 §2, étape 3, révisé prod).
 
-On fabrique une fixture netCDF synthétique avec `netCDF4` (structure ListProduct : latitude,
-longitude, fire_radiative_power, confidence, time CF) — aucun fichier 0682 réel requis. On couvre :
-extraction des champs, décodage du temps CF, filtrage par bbox France, lecture depuis des OCTETS
-(cas du fetcher) et depuis un chemin, la tolérance aux noms de variables, et l'erreur si lat/lon manquent.
+Fixture synthétique : une petite grille en VRAIE projection géostationnaire (params du 0682 réel),
+avec des pixels feu placés par déprojection inverse. On couvre : déprojection x,y → lat/lon, filtrage
+bbox, classes-feu configurables, probabilité, heure depuis l'attribut global, dézippage du SIP,
+et l'erreur si une variable de grille manque.
 """
 
 from __future__ import annotations
 
-import datetime as dt
+import io
+import zipfile
 
 import netCDF4
 import numpy as np
 import pytest
+from pyproj import CRS, Transformer
 
 from vigifeu.ingest import mtg_netcdf
 from vigifeu.model.db import load_config
 
-# Slot 2026-08-06T12:40:00Z encodé en « seconds since 2000-01-01 ».
-_SLOT = dt.datetime(2026, 8, 6, 12, 40, 0)
-_SECS = (_SLOT - dt.datetime(2000, 1, 1)).total_seconds()
+_H = 3.57864e7
+_A, _B = 6378137.0, 6356752.0
+_GEOS = CRS.from_proj4(
+    f"+proj=geos +h={_H} +lon_0=0 +a={_A} +b={_B} +sweep=y +units=m +no_defs +type=crs"
+)
+_FWD = Transformer.from_crs("EPSG:4326", _GEOS, always_xy=True)
+
+FRANCE = (-1.0, 44.7)    # Gironde
+AFRIQUE = (15.0, 5.0)    # sur le disque, hors bbox France
 
 
 @pytest.fixture()
@@ -27,98 +35,91 @@ def config():
     return load_config("config/params.toml")
 
 
-def _make_nc(path, *, group="ListProduct", conf_name="confidence"):
-    """Fixture : 3 pixels — 2 dans le bbox France, 1 hors (lat 10.0 < 41)."""
+def _rad(lon, lat):
+    """(lon,lat) → (x_rad, y_rad) tels que stockés dans le netCDF (mètres / hauteur satellite)."""
+    xm, ym = _FWD.transform(lon, lat)
+    return xm / _H, ym / _H
+
+
+def _make_grid(path):
+    """3×3 grille geos : pixel (0,0)=France classe 3, (1,1)=Afrique classe 2, reste 0/4."""
+    xa, ya = _rad(*FRANCE)
+    xb, yb = _rad(*AFRIQUE)
     ds = netCDF4.Dataset(str(path), "w")
-    g = ds.createGroup(group) if group else ds
-    g.createDimension("pixel", 3)
-    lat = g.createVariable("latitude", "f4", ("pixel",))
-    lon = g.createVariable("longitude", "f4", ("pixel",))
-    frp = g.createVariable("fire_radiative_power", "f4", ("pixel",))
-    conf = g.createVariable(conf_name, "i4", ("pixel",))
-    t = g.createVariable("time", "f8", ("pixel",))
-    t.units = "seconds since 2000-01-01T00:00:00"
-    t.calendar = "standard"
-    lat[:] = [44.7, 48.0, 10.0]     # Gironde, Île-de-France, (hors France : lat 10)
-    lon[:] = [-1.0, 2.0, 2.0]
-    frp[:] = [12.5, 30.0, 5.0]
-    conf[:] = [1, 2, 1]
-    t[:] = [_SECS, _SECS, _SECS]
+    ds.time_coverage_start = "20260806171000"
+    ds.createDimension("number_of_rows", 3)
+    ds.createDimension("number_of_columns", 3)
+    proj = ds.createVariable("mtg_geos_projection", "i4")
+    proj.perspective_point_height = np.float32(_H)
+    proj.semi_major_axis = np.float32(_A)
+    proj.semi_minor_axis = np.float32(_B)
+    proj.longitude_of_projection_origin = np.float32(0.0)
+    proj.sweep_angle_axis = "y"
+    ds.createVariable("x", "f8", ("number_of_columns",))[:] = [xa, xb, xa]
+    ds.createVariable("y", "f8", ("number_of_rows",))[:] = [ya, yb, ya]
+    fr = ds.createVariable("fire_result", "i1", ("number_of_rows", "number_of_columns"))
+    grid = np.zeros((3, 3), dtype="i1")
+    grid[0, 0] = 3          # France, haute confiance
+    grid[1, 1] = 2          # Afrique, confiance moyenne
+    grid[2, 2] = 4          # hors-disque/non traité (jamais « feu »)
+    fr[:] = grid
+    prob = ds.createVariable("fire_probability", "f4", ("number_of_rows", "number_of_columns"))
+    pg = np.zeros((3, 3), dtype="f4")
+    pg[0, 0] = 0.87
+    prob[:] = pg
     ds.close()
 
 
-def test_extraction_et_filtre_bbox(tmp_path, config):
+def test_deprojection_et_bbox(tmp_path, config):
     p = tmp_path / "fir.nc"
-    _make_nc(p)
-    pixels = mtg_netcdf.parse_listproduct(p, config, bbox=config["mtg"]["bbox"])
-    assert len(pixels) == 2                      # le 3e (lat 10) est hors bbox
-    assert pixels[0]["lat"] == pytest.approx(44.7, abs=1e-4)
-    assert pixels[0]["lon"] == pytest.approx(-1.0, abs=1e-4)
-    assert pixels[0]["frp_mw"] == pytest.approx(12.5, abs=1e-3)
-    assert pixels[0]["confidence"] == "1"        # entier propre, texte brut
-    assert pixels[1]["confidence"] == "2"
+    _make_grid(p)
+    pix = mtg_netcdf.parse_fir(p, config, bbox=config["mtg"]["bbox"])
+    assert len(pix) == 1                                  # seule la France passe le bbox
+    assert pix[0]["lon"] == pytest.approx(-1.0, abs=1e-3)
+    assert pix[0]["lat"] == pytest.approx(44.7, abs=1e-3)
+    assert pix[0]["confidence"] == "3"                    # classe de détection
+    assert pix[0]["probability"] == pytest.approx(0.87, abs=1e-2)
+    assert pix[0]["frp_mw"] is None                       # le 0682 n'a PAS de FRP
 
 
-def test_decode_temps_cf(tmp_path, config):
+def test_heure_depuis_attribut_global(tmp_path, config):
     p = tmp_path / "fir.nc"
-    _make_nc(p)
-    pixels = mtg_netcdf.parse_listproduct(p, config, bbox=config["mtg"]["bbox"])
-    assert pixels[0]["acq_at"] == "2026-08-06T12:40:00Z"
+    _make_grid(p)
+    pix = mtg_netcdf.parse_fir(p, config, bbox=config["mtg"]["bbox"])
+    assert pix[0]["acq_at"] == "2026-08-06T17:10:00Z"     # time_coverage_start
 
 
-def test_lecture_depuis_octets(tmp_path, config):
-    """Le fetcher passe des OCTETS téléchargés : parsing en mémoire (memory=)."""
+def test_sans_bbox_deux_pixels(tmp_path, config):
     p = tmp_path / "fir.nc"
-    _make_nc(p)
-    data = p.read_bytes()
-    pixels = mtg_netcdf.parse_listproduct(data, config, bbox=config["mtg"]["bbox"])
-    assert len(pixels) == 2
-    assert pixels[1]["frp_mw"] == pytest.approx(30.0, abs=1e-3)
+    _make_grid(p)
+    pix = mtg_netcdf.parse_fir(p, config)                 # France + Afrique (le 4 est exclu)
+    assert len(pix) == 2
 
 
-def test_sans_bbox_tout_est_pris(tmp_path, config):
+def test_classes_configurable(tmp_path, config):
     p = tmp_path / "fir.nc"
-    _make_nc(p)
-    assert len(mtg_netcdf.parse_listproduct(p, config)) == 3
+    _make_grid(p)
+    config["mtg"]["netcdf"]["fire_classes"] = [3]         # seule la haute confiance
+    pix = mtg_netcdf.parse_fir(p, config)
+    assert len(pix) == 1 and pix[0]["confidence"] == "3"
 
 
-def test_default_acq_at_si_pas_de_temps(tmp_path, config):
-    """Sans variable temps exploitable, on retombe sur l'heure du slot fournie par le listing."""
-    ds = netCDF4.Dataset(str(tmp_path / "no_time.nc"), "w")
-    g = ds.createGroup("ListProduct")
-    g.createDimension("pixel", 1)
-    g.createVariable("latitude", "f4", ("pixel",))[:] = [44.7]
-    g.createVariable("longitude", "f4", ("pixel",))[:] = [-1.0]
-    ds.close()
-    pixels = mtg_netcdf.parse_listproduct(
-        tmp_path / "no_time.nc", config, bbox=config["mtg"]["bbox"],
-        default_acq_at="2026-08-06T12:50:00Z",
-    )
-    assert pixels[0]["acq_at"] == "2026-08-06T12:50:00Z"
-    assert pixels[0]["frp_mw"] is None           # pas de variable FRP → None
+def test_lecture_depuis_zip_sip(tmp_path, config):
+    """Le Data Store livre un ZIP (SIP) : parse_fir en extrait le .nc."""
+    p = tmp_path / "fir.nc"
+    _make_grid(p)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.write(p, arcname="MTI1+FCI-2-FIR.nc")
+        z.writestr("manifest.xml", "<x/>")
+    pix = mtg_netcdf.parse_fir(buf.getvalue(), config, bbox=config["mtg"]["bbox"])
+    assert len(pix) == 1 and pix[0]["confidence"] == "3"
 
 
-def test_tolerance_noms_variables(tmp_path, config):
-    """Un nom candidat alternatif (fire_confidence) est reconnu (config = liste de candidats)."""
-    p = tmp_path / "alt.nc"
-    _make_nc(p, conf_name="fire_confidence")
-    pixels = mtg_netcdf.parse_listproduct(p, config, bbox=config["mtg"]["bbox"])
-    assert pixels[0]["confidence"] == "1"
-
-
-def test_lat_lon_manquants_leve(tmp_path, config):
+def test_variable_absente_leve(tmp_path, config):
     ds = netCDF4.Dataset(str(tmp_path / "bad.nc"), "w")
-    g = ds.createGroup("ListProduct")
-    g.createDimension("pixel", 1)
-    g.createVariable("fire_radiative_power", "f4", ("pixel",))[:] = [1.0]
+    ds.createDimension("n", 1)
+    ds.createVariable("x", "f8", ("n",))
     ds.close()
     with pytest.raises(mtg_netcdf.MtgNetcdfError):
-        mtg_netcdf.parse_listproduct(tmp_path / "bad.nc", config)
-
-
-def test_groupe_absent_repli_racine(tmp_path, config):
-    """Si le groupe ListProduct n'existe pas, on lit à la racine (tolérant)."""
-    p = tmp_path / "root.nc"
-    _make_nc(p, group=None)  # variables à la racine
-    pixels = mtg_netcdf.parse_listproduct(p, config, bbox=config["mtg"]["bbox"])
-    assert len(pixels) == 2
+        mtg_netcdf.parse_fir(tmp_path / "bad.nc", config)

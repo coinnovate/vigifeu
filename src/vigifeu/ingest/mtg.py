@@ -19,7 +19,7 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 
 from vigifeu.ingest.eumetsat import EumetsatClient
-from vigifeu.ingest.mtg_netcdf import parse_listproduct
+from vigifeu.ingest.mtg_netcdf import parse_fir
 
 _SOURCE = "mtg:0682"
 
@@ -130,7 +130,7 @@ def fetch_mtg_fir(
         for prod in produits:
             try:
                 data = cli.download(prod["download_url"])
-                pixels = parse_listproduct(
+                pixels = parse_fir(
                     data, config, bbox=m["bbox"], default_acq_at=prod.get("sensing_at")
                 )
                 n_rows, n_new = _insert_pixels(conn, config, run_id, pixels)
