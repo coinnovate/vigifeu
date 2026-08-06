@@ -26,6 +26,13 @@ _HOTSPOT_COLS = [
     "overpass_id", "fixed_source_id",
 ]
 
+# geo_detection_raw (MTG, Spec 07 §4.3) — même discipline que hotspot_raw : export Parquet puis purge.
+_GEODET_COLS = [
+    "id", "provider", "lat", "lon", "acq_at", "ingested_at", "ingestion_run_id",
+    "frp_mw", "frp_uncertainty_mw", "confidence", "quality_flag",
+    "geo_candidate_id", "confirmed_by_fire_event_id", "raw_payload",
+]
+
 
 def _partition_path(root: Path, table: str, day_iso: str) -> Path:
     y, m, d = day_iso.split("-")
@@ -115,6 +122,7 @@ def archive_sweep(
         )
         purged += cur.rowcount
 
+    geo = _sweep_geodetections(conn, config, today, root)
     ing = _sweep_ingestion_runs(conn, config, today)
     conn.commit()
 
@@ -122,8 +130,58 @@ def archive_sweep(
         "exported_hotspots": exported,
         "purged_hotspots": purged,
         "protected_hotspots": protected,
+        "exported_geodetections": geo["exported"],
+        "purged_geodetections": geo["purged"],
+        "protected_geodetections": geo["protected"],
         "purged_runs": ing,
     }
+
+
+def _sweep_geodetections(conn: sqlite3.Connection, config: dict, today: date, root: Path) -> dict:
+    """Archive Parquet + purge de geo_detection_raw (Spec 07 §4.3), même règle cardinale que hotspot :
+    jamais une détection rattachée à un feu NON archivé, ni à un candidat encore `en_attente`."""
+    ret = config["archive"].get("geo_detection_retention_days", 14)
+    cutoff = today - timedelta(days=ret)
+    days = [
+        r["d"]
+        for r in conn.execute(
+            "SELECT DISTINCT substr(acq_at, 1, 10) AS d FROM geo_detection_raw "
+            "WHERE substr(acq_at, 1, 10) < ? ORDER BY d",
+            (today.isoformat(),),
+        )
+    ]
+    exported = purged = protected = 0
+    # Détections PROTÉGÉES : rattachées à un feu vivant, ou à un candidat en attente.
+    protege = (
+        "id IN (SELECT g.id FROM geo_detection_raw g "
+        "  LEFT JOIN fire_event fe ON fe.id = g.confirmed_by_fire_event_id "
+        "  LEFT JOIN geo_candidate gc ON gc.id = g.geo_candidate_id "
+        "  WHERE (fe.id IS NOT NULL AND fe.lifecycle != 'archive') "
+        "     OR (gc.id IS NOT NULL AND gc.status = 'en_attente'))"
+    )
+    for day_iso in days:
+        rows = conn.execute(
+            f"SELECT {', '.join(_GEODET_COLS)} FROM geo_detection_raw "
+            "WHERE substr(acq_at, 1, 10) = ? ORDER BY id",
+            (day_iso,),
+        ).fetchall()
+        _write_parquet(rows, _GEODET_COLS, _partition_path(root, "geo_detection_raw", day_iso))
+        exported += len(rows)
+    for day_iso in days:
+        if date.fromisoformat(day_iso) > cutoff:
+            continue  # encore dans la fenêtre vivante
+        if not _partition_path(root, "geo_detection_raw", day_iso).exists():
+            continue  # garde-fou : jamais purger un jour non archivé
+        protected += conn.execute(
+            f"SELECT COUNT(*) AS n FROM geo_detection_raw WHERE substr(acq_at, 1, 10) = ? AND {protege}",
+            (day_iso,),
+        ).fetchone()["n"]
+        cur = conn.execute(
+            f"DELETE FROM geo_detection_raw WHERE substr(acq_at, 1, 10) = ? AND NOT {protege}",
+            (day_iso,),
+        )
+        purged += cur.rowcount
+    return {"exported": exported, "purged": purged, "protected": protected}
 
 
 def _sweep_ingestion_runs(conn: sqlite3.Connection, config: dict, today: date) -> int:

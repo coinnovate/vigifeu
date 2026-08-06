@@ -33,12 +33,13 @@ from vigifeu.engine.cluster import apply_lifecycle
 from vigifeu.engine.overpass import build_overpasses
 from vigifeu.engine.commune_context import concerned_communes, refresh_commune_context
 from vigifeu.engine.pipeline import process_cycle
-from vigifeu.engine.regen import enqueue, enqueue_fire_update
+from vigifeu.engine.regen import CARTE_REF, enqueue, enqueue_fire_update
 from vigifeu.engine.relations import fire_footprint_l93
 from vigifeu.engine.wind import recompute_direction_vent
 from vigifeu.generate.runner import consume, finalize_site, sync_static
 from vigifeu.ingest.bulletins import generer_bulletins
 from vigifeu.ingest.firms import fetch_cycle, fetch_firms_backfill
+from vigifeu.ingest.mtg import run_mtg_cycle
 from vigifeu.ingest.weather import fetch_weather_obs
 from vigifeu.model.archive import archive_sweep
 from vigifeu.model.db import connect, load_config, migrate, sync_satellite_sources
@@ -233,6 +234,31 @@ def main() -> None:
             run_regen("bulletins")
         ping_healthcheck(os.environ.get("HEALTHCHECK_BULLETINS_URL"))
 
+    def job_fetch_mtg() -> None:
+        # Spec 07 §9 : cycle MTG (ingestion → confirmation VIIRS → candidats). MARCHE À BLANC tant
+        # que [mtg].activated=false (aucun run écrit, pas de healthcheck). Sérialisé dans le worker
+        # unique (écrivain SQLite unique). Non bloquant : run_mtg_cycle journalise ses erreurs de
+        # source sans lever. Enfile la régén des fiches touchées + la carte (calque signaux), puis
+        # pingue le dead-man switch dédié.
+        if not config["mtg"]["activated"]:
+            return
+        res = run_mtg_cycle(conn, config)
+        c = res["candidates"]
+        log.info(
+            "mtg: %d nouveaux, %d confirmés ; candidats %d créés, %d grossis, %d promus, %d expirés",
+            res["fetch"]["n_new"], res["confirm"]["n_confirmed"],
+            c["crees"], c["grossis"], c["promus"], c["expires"],
+        )
+        stamp = datetime.now(UTC).isoformat()
+        for fid in res["fires"]:
+            enqueue(conn, "feu", str(fid), stamp=stamp, trigger="mtg")
+        if res["carte"]:
+            enqueue(conn, "carte", CARTE_REF, stamp=stamp, trigger="mtg")
+        conn.commit()
+        if res["fires"] or res["carte"]:
+            run_regen("mtg")
+        ping_healthcheck(os.environ.get("HEALTHCHECK_MTG_URL"))
+
     def job_finalize_site() -> None:
         # Passe nocturne (Spec 04 §3) : artefacts « site-level » indépendants de la
         # regen_queue — pages éditoriales, listes départements, sitemaps, robots,
@@ -291,6 +317,11 @@ def main() -> None:
         id="bulletins", max_instances=1, coalesce=True,
     )
     scheduler.add_job(
+        job_fetch_mtg, "interval",
+        minutes=config["mtg"]["fetch_interval_min"],
+        id="fetch_mtg", max_instances=1, coalesce=True,
+    )
+    scheduler.add_job(
         job_finalize_site, "cron", hour=4, minute=0,   # nuit, après l'archivage
         id="finalize_site", max_instances=1, coalesce=True,
     )
@@ -313,6 +344,7 @@ def main() -> None:
     # Assets statiques + carte-config.js (clé MapTiler depuis l'env) une fois au boot.
     sync_static(config)
     job_fetch_firms()  # premier cycle sans attendre l'intervalle (draine déjà si nouveauté)
+    job_fetch_mtg()    # cycle MTG immédiat (marche à blanc si [mtg].activated=false)
     # Vide l'arriéré de regen_queue accumulé (file alimentée depuis le Lot 3 sans
     # consommateur) puis construit les artefacts site-level, pour que le site soit
     # complet dès le premier service — avant même le premier cron nocturne.

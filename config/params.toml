@@ -350,7 +350,7 @@ sim_percentile_seuils = [10, 40, 60]
 # Mécanisme principal : dead-man switch healthchecks.io (un ping manquant EST
 # l'alerte). Les URLs de ping sont des secrets → environnement, pas ce fichier :
 #   HEALTHCHECK_FIRMS_URL, HEALTHCHECK_BACKFILL_URL,
-#   HEALTHCHECK_ARCHIVE_URL, HEALTHCHECK_COLLECTION_URL
+#   HEALTHCHECK_ARCHIVE_URL, HEALTHCHECK_COLLECTION_URL, HEALTHCHECK_MTG_URL (Spec 07 §9)
 gap_alert_hours = 24     # trou de collecte réussie au-delà → alerte (log + ping /fail)
 
 [archive]

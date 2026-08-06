@@ -27,9 +27,11 @@ _ISO = "%Y-%m-%dT%H:%M:%SZ"
 
 
 def process_candidates(conn: sqlite3.Connection, config: dict, *, clock: datetime | None = None) -> dict:
-    """Promotion + amorçage/croissance + expiration. Retourne {promus, crees, grossis, expires}."""
+    """Promotion + amorçage/croissance + expiration. Retourne {promus, crees, grossis, expires, fires}.
+
+    `fires` = feux dont un candidat vient d'être promu (leur fiche doit être régénérée, étape 9)."""
     now = clock or datetime.now(UTC)
-    stats = {"promus": 0, "crees": 0, "grossis": 0, "expires": 0}
+    stats = {"promus": 0, "crees": 0, "grossis": 0, "expires": 0, "fires": []}
     _promote(conn, stats)
     _grow_and_seed(conn, config, now, stats)
     _expire(conn, config, now, stats)
@@ -49,6 +51,7 @@ def _promote(conn: sqlite3.Connection, stats: dict) -> None:
     chosen: dict[int, int] = {}
     for r in rows:
         chosen.setdefault(r["cand"], r["fid"])
+    fires: set[int] = set()
     for cand, fid in chosen.items():
         conn.execute("UPDATE geo_candidate SET status='confirme', fire_event_id=? WHERE id=?", (fid, cand))
         conn.execute(
@@ -57,6 +60,8 @@ def _promote(conn: sqlite3.Connection, stats: dict) -> None:
             (fid, cand),
         )
         stats["promus"] += 1
+        fires.add(fid)
+    stats["fires"] = sorted(fires)
 
 
 def _grow_and_seed(conn: sqlite3.Connection, config: dict, now: datetime, stats: dict) -> None:

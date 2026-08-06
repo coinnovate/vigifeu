@@ -149,6 +149,34 @@ def fetch_mtg_fir(
         return stats
 
 
+def run_mtg_cycle(
+    conn: sqlite3.Connection,
+    config: dict,
+    *,
+    client: EumetsatClient | None = None,
+    clock: datetime | None = None,
+) -> dict:
+    """Cycle MTG complet : ingestion → confirmation VIIRS → candidats (promotion/amorçage/expiration).
+
+    Assemble les étapes 4-6 pour le daemon (étape 9). Retourne un résumé + `fires` (feux dont la
+    fiche doit être régénérée) et `carte` (booléen : le calque « signaux en attente » a changé).
+    Les imports moteur sont locaux pour éviter tout cycle d'import ingest ↔ engine.
+    """
+    from vigifeu.engine.geo_candidate import process_candidates
+    from vigifeu.engine.geo_confirm import confirm_detections
+
+    now = clock or datetime.now(UTC)
+    fetch = fetch_mtg_fir(conn, config, client=client, clock=now)
+    conf = confirm_detections(conn, config, clock=now)
+    cand = process_candidates(conn, config, clock=now)
+    fires = sorted(set(conf["fires"]) | set(cand["fires"]))
+    carte = bool(
+        fetch.get("n_new") or conf["n_confirmed"]
+        or cand["promus"] or cand["crees"] or cand["grossis"] or cand["expires"]
+    )
+    return {"fetch": fetch, "confirm": conf, "candidates": cand, "fires": fires, "carte": carte}
+
+
 def _finir(conn, run_id: int, status: str, stats: dict, *, note: str | None = None) -> None:
     """Clôt l'ingestion_run avec le résumé du cycle (observabilité — Spec 01 §3.7)."""
     detail = {k: v for k, v in stats.items() if k != "status"}
