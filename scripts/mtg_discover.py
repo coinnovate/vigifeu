@@ -139,27 +139,36 @@ def _extract_nc(path: str) -> str:
 def _dump_netcdf(path: str) -> None:
     import netCDF4  # import tardif : n'échoue que si on va jusqu'au dump
 
+    import numpy as np
+
     path = _extract_nc(path)
-    print("\n[4/4] Structure netCDF (groupes + variables) :")
+    print("\n[4/4] Structure netCDF (variables + ATTRIBUTS) :")
     ds = netCDF4.Dataset(path, "r")
     try:
-        print("GROUPES :", list(ds.groups))
-        for gname in (list(ds.groups) or [None]):
-            g = ds.groups[gname] if gname else ds
-            libelle = gname or "(racine)"
-            print(f"\n  Groupe « {libelle} » — variables :")
-            for vn, v in g.variables.items():
-                units = getattr(v, "units", "")
-                dims = ",".join(v.dimensions)
-                print(f"    - {vn:32s} [{dims}] {('units=' + units) if units else ''}")
+        print("--- attributs GLOBAUX ---")
+        for a in ds.ncattrs():
+            print(f"    @{a} = {getattr(ds, a)!r}")
+        print("\n--- dimensions ---", {d: ds.dimensions[d].size for d in ds.dimensions})
+        for vn, v in ds.variables.items():
+            print(f"\n  {vn}  dims={v.dimensions} dtype={v.dtype}")
+            for a in v.ncattrs():
+                print(f"      @{a} = {getattr(v, a)!r}")
+        # Classification de fire_result : valeurs présentes (pour savoir ce qui = « feu »).
+        fr = ds.variables.get("fire_result")
+        if fr is not None:
+            arr = np.asarray(fr[:]).ravel()
+            arr = arr[~np.ma.getmaskarray(np.ma.asarray(fr[:]).ravel())] if hasattr(fr[:], "mask") else arr
+            vals, counts = np.unique(arr, return_counts=True)
+            paires = sorted(zip(vals.tolist(), counts.tolist()), key=lambda t: -t[1])[:15]
+            print("\n--- fire_result : (valeur, nb pixels) les plus fréquents ---")
+            print("   ", paires)
     finally:
         ds.close()
 
-    print("\n=== À reporter dans config/params.toml ===")
-    print("[mtg]        data_url  = base de l'endpoint qui a marché ci-dessus (sans /search-products/...)")
-    print("[mtg.netcdf] group / lat / lon / time / frp / frp_uncertainty / confidence :")
-    print("             mets les VRAIS noms de variables du groupe ListProduct listés au [4/4].")
-    print("Puis : figer une fixture tests/fixtures/mtg/, valider sur Saumos, activated=true.")
+    print("\n=== Ce dont j'ai besoin (colle tout le bloc [4/4]) ===")
+    print(" - attributs de fire_result (flag_values/flag_meanings) → quelles valeurs = feu")
+    print(" - attributs de x, y (units, scale_factor, add_offset) et de mtg_geos_projection")
+    print(" - attributs globaux portant l'heure de détection (sensing/observation time)")
 
 
 def main() -> None:
