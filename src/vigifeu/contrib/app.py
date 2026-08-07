@@ -14,12 +14,25 @@ from __future__ import annotations
 
 import os
 
-from flask import Blueprint, Flask, current_app, jsonify
+from flask import Blueprint, Flask, current_app, jsonify, request
 
 from vigifeu.contrib.db import connect_contrib, connect_socle_readonly, migrate_contrib
+from vigifeu.contrib.socle import feux_proches
 from vigifeu.model.db import current_version, load_config
 
 bp = Blueprint("contrib", __name__, url_prefix="/api/contrib")
+
+
+def _territoire(config: dict) -> tuple[float, float, float, float]:
+    """Bornes (lon_min, lat_min, lon_max, lat_max) du territoire, depuis `general.firms_bbox`."""
+    w, s, e, n = (float(v) for v in config["general"]["firms_bbox"].split(","))
+    return w, s, e, n
+
+
+def _hors_territoire(config: dict, lat: float, lon: float) -> bool:
+    """True si le point sort de la zone couverte (rejet des coordonnées aberrantes, §4)."""
+    w, s, e, n = _territoire(config)
+    return not (s <= lat <= n and w <= lon <= e)
 
 
 @bp.get("/health")
@@ -50,6 +63,35 @@ def health():
             "socle_reachable": socle_reachable,
         }
     )
+
+
+@bp.get("/feux-proches")
+def feux_proches_endpoint():
+    """Feux publiés à moins de `rayon_max_km` de (lat, lon), triés par distance (§4).
+
+    `lat`/`lon` requis, décimaux, **bornés au territoire** (aucune donnée perso en query :
+    c'est la géoloc live, pas l'auteur). Socle absente → liste vide (dégradation, jamais 500).
+    """
+    config = current_app.config["VIGIFEU"]
+    contrib_cfg = config["contributions"]
+
+    try:
+        lat = float(request.args["lat"])
+        lon = float(request.args["lon"])
+    except (KeyError, ValueError):
+        return jsonify({"error": "lat et lon requis (nombres décimaux)"}), 400
+    if _hors_territoire(config, lat, lon):
+        return jsonify({"error": "coordonnées hors zone couverte"}), 400
+
+    try:
+        sc = connect_socle_readonly(config["general"]["db_path"])
+    except FileNotFoundError:
+        return jsonify({"feux": []})  # socle non déployée → aucun feu, pas d'erreur
+    try:
+        feux = feux_proches(sc, lat, lon, contrib_cfg["rayon_max_km"])
+    finally:
+        sc.close()
+    return jsonify({"feux": feux})
 
 
 def create_app(config: dict | None = None) -> Flask:
