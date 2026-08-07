@@ -515,6 +515,7 @@ filtre_nudenet_model = ""               # classifieur NSFW ONNX (sortie = probab
 filtre_clip_image_model = ""            # encodeur image CLIP ViT-B/32 ONNX
 filtre_clip_labels_npz = ""             # embeddings texte précalculés des labels feu/hors-sujet (§10)
 action_token_ttl_h = 72                 # validité des liens d'action signés (modération par mail)
+mail_expediteur = "Sentifeu <no-reply@sentifeu.fr>"  # From des mails (modération + notif publication)
 notif_seuil = 1                         # alerte file au-delà de N contributions en attente
 purge_rejetees_mois = 6                 # purge photo + perso des rejetées (squelette LCEN conservé)
 purge_email_publiee_mois = 3            # purge de l'email des publiées
