@@ -478,3 +478,33 @@ platform = "NOAA-21"
 instrument = "VIIRS"
 resolution_m = 375
 active = true
+
+[contributions]
+# Spec 10 — canal contributif photo public (capture in-app stricte). Base SÉPARÉE de la socle
+# (l'API en est l'écrivain) → préserve l'invariant « un seul écrivain sur la socle = le daemon »
+# (plan §1.1). `activated` reste OFF tant que le parcours + la modération ne sont pas validés
+# bout-en-bout (repasser à false désactive le canal sans rien casser).
+activated = false
+db_path = "data/contributions.db"       # base propre au canal (distincte de general.db_path)
+rayon_max_km = 10.0                      # pas de hotspot en deçà → refus (§4) ; ancre = géoloc live
+max_px = 1600                            # image d'affichage (lightbox)
+thumb_px = 480                           # vignette (grille)
+jpeg_qualite = 82
+photos_page_taille = 24                  # pagination de la galerie (widget, §7)
+photos_json_ttl_s = 60                   # Cache-Control du JSON (retraits propagés vite)
+image_ttl_s = 3600                       # Cache-Control des images (immutable, clé = public_id)
+max_photos_ip_jour = 6                   # quota anti-flood par IP (axe principal, §8)
+auto_block_n_rejets = 5                  # auto_rejetee cumulés sur une IP → blocklist
+auto_block_n_signalements = 2
+ip_block_expire_jours = 90               # blocage IP borné dans le temps
+seuil_nsfw = 0.85                        # ≥ → auto_rejetee (nsfw)
+seuil_feu = 0.30                         # < → auto_rejetee (hors_sujet)
+clip_labels_feu = ["a photo of a wildfire", "a photo of smoke", "a photo of a forest fire"]
+clip_labels_hors_sujet = ["a selfie", "a screenshot", "a meme", "an indoor photo", "a document"]
+filtre_intervalle_min = 5               # cadence du worker auto-filtre (à la demande)
+filtre_timeout_image_s = 20
+filtre_timeout_lot_s = 300
+action_token_ttl_h = 72                 # validité des liens d'action signés (modération par mail)
+notif_seuil = 1                         # alerte file au-delà de N contributions en attente
+purge_rejetees_mois = 6                 # purge photo + perso des rejetées (squelette LCEN conservé)
+purge_email_publiee_mois = 3            # purge de l'email des publiées
