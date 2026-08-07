@@ -1,0 +1,25 @@
+# Snippet Nginx — service contributif Sentifeu (Spec 10 §2), SAME-ORIGIN.
+# À inclure DANS le server { } HTTPS de sentifeu.fr (cf. nginx-sentifeu.conf), pour que
+# /api/contrib et /admin/contrib soient servis par le service waitress (port 8081) sur la
+# MÊME origine que le site statique → pas de CORS, getUserMedia OK (contexte sécurisé HTTPS).
+#
+# À placer AVANT le `location / { }` qui sert le site statique (préfixes plus spécifiques).
+
+# Mini-API publique (feux-proches, dépôt, widget, images, actions de modération par mail).
+location /api/contrib/ {
+    proxy_pass         http://127.0.0.1:8081;
+    proxy_set_header   Host $host;
+    # IP client réelle : le service en dérive l'ip_hash (quota/blocklist, §8).
+    proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+    # Upload photo : doit dépasser [contributions].max_upload_mo (12 Mo) — sinon 413 côté Nginx.
+    client_max_body_size 15m;
+}
+
+# Page d'administration de la modération (protégée par basic auth applicative).
+location /admin/contrib {
+    proxy_pass         http://127.0.0.1:8081;
+    proxy_set_header   Host $host;
+    proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+}

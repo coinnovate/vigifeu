@@ -69,6 +69,22 @@ echo "--- journal depuis le redémarrage ---"
 journalctl -u "$SERVICE" --since "$SINCE" --no-pager \
   | grep -E "migrations appliquées|démarrage —|Added job|ALERTE" || true
 
+# --- service contributif (Spec 10), s'il est installé -----------------------
+# Redémarré seulement s'il est activé : le déploiement reste identique tant que le
+# service n'a pas été installé (cp de l'unité + systemctl enable).
+CONTRIB_SERVICE="${CONTRIB_SERVICE:-vigifeu-contrib}"
+if systemctl is-enabled --quiet "$CONTRIB_SERVICE" 2>/dev/null; then
+  echo "==> redémarrage du service $CONTRIB_SERVICE"
+  systemctl restart "$CONTRIB_SERVICE"
+  sleep 2
+  if ! systemctl is-active --quiet "$CONTRIB_SERVICE"; then
+    echo "ÉCHEC : $CONTRIB_SERVICE n'est pas actif après redémarrage." >&2
+    echo "Diagnostic : journalctl -u $CONTRIB_SERVICE -n 50 --no-pager" >&2
+    exit 1
+  fi
+  echo "   $CONTRIB_SERVICE actif."
+fi
+
 echo ""
 echo "✅ Déploiement terminé — schéma en version $VERSION, service actif."
 echo "   Suivre les cycles : journalctl -u $SERVICE -f"

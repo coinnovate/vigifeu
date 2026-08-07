@@ -14,6 +14,7 @@ dependencies = [
     "netcdf4>=1.6",    # parsing du netCDF MTG FCI L2 FIR (groupe ListProduct) — Spec 07 §2, phase 2
     "flask>=3.0",      # mini-API same-origin du canal contributif — Spec 10 §2 (service /api/contrib)
     "pillow>=10.3",    # encodage des contributions photo : 2 tailles JPEG, sans EXIF — Spec 10 §4 (étape 2)
+    "waitress>=3.0",   # serveur WSGI du service contributif (systemd, derrière reverse proxy) — Spec 10 §2
 ]
 
 [project.optional-dependencies]

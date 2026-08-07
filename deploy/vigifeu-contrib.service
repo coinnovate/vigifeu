@@ -1,0 +1,36 @@
+# /etc/systemd/system/vigifeu-contrib.service
+# Service contributif Sentifeu (Spec 10) — mini-API photo du public.
+# Distinct du daemon d'ingestion (vigifeu.service) : écrit la base contributions,
+# lit la socle en READ-ONLY (l'écrivain unique de la socle reste le daemon, plan §1.1).
+#
+# Installation :
+#   sudo cp deploy/vigifeu-contrib.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now vigifeu-contrib
+# Logs : journalctl -u vigifeu-contrib -f
+#
+# Prérequis .env (/opt/vigifeu/.env) : CONTRIB_HASH_SECRET (obligatoire),
+#   CONTRIB_ADMIN_USER/PASSWORD (page /admin/contrib), CONTRIB_SMTP_* +
+#   CONTRIB_MODERATION_EMAIL (mails), éventuellement CONTRIB_PORT/CONTRIB_THREADS.
+
+[Unit]
+Description=Sentifeu — service contributif (photos du public)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vigifeu
+WorkingDirectory=/opt/vigifeu
+EnvironmentFile=/opt/vigifeu/.env
+ExecStart=/opt/vigifeu/.venv/bin/python -m vigifeu.contrib.serveur
+Restart=always
+RestartSec=10
+# Durcissement (mêmes bases que vigifeu.service). La base contributions et les images
+# encodées vivent sous data/ ; le service n'écrit rien d'autre.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/vigifeu/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
