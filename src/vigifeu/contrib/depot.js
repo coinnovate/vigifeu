@@ -21,9 +21,15 @@
   "use strict";
 
   var API = "/api/contrib";
+  // Licence d'AFFICHAGE non-exclusive (l'auteur garde ses droits) + garantie d'auteur +
+  // absence de personne identifiable (aide au droit à l'image en amont de la modération, §11).
   var CONSENT_TXT =
-    "Je certifie être l'auteur de cette photo, prise à l'instant, et j'accepte sa " +
-    "publication après modération ainsi que la conservation associée (voir mentions légales).";
+    "Je certifie être l'auteur de cette photo, prise à l'instant, et qu'elle ne montre pas de " +
+    "personne identifiable. J'accorde à Sentifeu une licence non exclusive d'affichage sur le " +
+    "site et j'accepte les conditions de contribution.";
+  var SECU_TXT =
+    "⚠️ Ne vous approchez jamais des flammes ni des zones d'intervention. " +
+    "Sentifeu n'est pas un service de secours — en cas d'urgence, appelez le 18 ou le 112.";
 
   // --- styles (injectés une seule fois) ----------------------------------
   function injecterStyles() {
@@ -40,7 +46,9 @@
       "cursor:pointer;margin:.25rem .25rem 0 0}" +
       ".sentifeu-modal .primaire{background:#c1440e;color:#fff;border-color:#c1440e}" +
       ".sentifeu-fermer{float:right;border:none;background:none;font-size:1.4rem;line-height:1}" +
-      ".sentifeu-erreur{color:#b00020}.sentifeu-feux label{display:block;margin:.2rem 0}";
+      ".sentifeu-erreur{color:#b00020}.sentifeu-feux label{display:block;margin:.2rem 0}" +
+      ".sentifeu-secu{margin-top:1rem;padding-top:.75rem;border-top:1px solid #eee;" +
+      "color:#b00020;font-size:.8rem}";
     document.head.appendChild(s);
   }
 
@@ -58,8 +66,10 @@
     var boite = el("div", { class: "sentifeu-modal-boite" });
     var fermer = el("button", { class: "sentifeu-fermer", "aria-label": "Fermer" }, "×");
     var corps = el("div");
+    var secu = el("p", { class: "sentifeu-secu" }, SECU_TXT); // rappel sécurité, toujours visible
     boite.appendChild(fermer);
     boite.appendChild(corps);
+    boite.appendChild(secu);
     overlay.appendChild(boite);
 
     var flux = null; // MediaStream à couper à la fermeture
@@ -107,7 +117,7 @@
     modal.corps.appendChild(el("h2", null, "Depuis votre téléphone"));
     modal.corps.appendChild(el("p", null,
       "Pour garantir une photo prise sur place, le dépôt se fait depuis un téléphone, " +
-      "près du feu. Ouvrez cette page sur votre mobile :"));
+      "à proximité du feu et à distance de sécurité. Ouvrez cette page sur votre mobile :"));
     var lien = el("p");
     var a = el("a", { href: window.location.href });
     a.textContent = window.location.href;
@@ -136,7 +146,8 @@
     chargerFeux(pos).then(function (feux) {
       if (!feux.length) {
         message(modal, "Aucun feu à proximité",
-          "Aucun feu détecté dans un rayon de 10 km. Le dépôt est réservé aux photos prises près d'un feu.");
+          "Aucun feu détecté dans un rayon de 10 km. Le dépôt est réservé aux photos prises " +
+          "à proximité d'un feu, en restant à distance de sécurité.");
         return;
       }
       // Présélection : le feu de la page s'il est dans la liste (vérifié par la géoloc),
