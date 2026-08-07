@@ -507,6 +507,13 @@ clip_labels_hors_sujet = ["a selfie", "a screenshot", "a meme", "an indoor photo
 filtre_intervalle_min = 5               # cadence du worker auto-filtre (à la demande)
 filtre_timeout_image_s = 20
 filtre_timeout_lot_s = 300
+filtre_lot_max = 50                      # nb max de contributions traitées par passage du worker
+# Modèles ONNX auto-hébergés (déployés HORS dépôt, comme les clés d'API). Vides → moteur
+# indisponible (FiltreIndisponible) : le worker ne tourne pas, les contributions restent
+# `soumise`. Renseignés + vérifiés live avant `activated = true` (§5).
+filtre_nudenet_model = ""               # classifieur NSFW ONNX (sortie = probabilité nsfw)
+filtre_clip_image_model = ""            # encodeur image CLIP ViT-B/32 ONNX
+filtre_clip_labels_npz = ""             # embeddings texte précalculés des labels feu/hors-sujet (§10)
 action_token_ttl_h = 72                 # validité des liens d'action signés (modération par mail)
 notif_seuil = 1                         # alerte file au-delà de N contributions en attente
 purge_rejetees_mois = 6                 # purge photo + perso des rejetées (squelette LCEN conservé)
