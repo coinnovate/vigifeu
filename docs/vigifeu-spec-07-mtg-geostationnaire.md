@@ -10,8 +10,33 @@ Spec 04 (générateur statique SEO, §29/§38 attribution), plan de dev §1.1 (�
 (courbe de tendance sur la fiche) et **surface la détection précoce** (calque « signaux en attente » sur la
 carte nationale), sans jamais entrer dans le clustering / la qualification / le `frp_max` VIIRS.
 **Ne modifie pas** la fixture golden Saumos ni la suite de tests existante (~333 verts).
-**Statut :** cadrage **exécutable**. La licence est **obtenue** (§3) et le format netCDF est **documenté**
-(§2) → on peut coder. À exécuter en petits pas (§11).
+**Statut :** **IMPLÉMENTÉE (étapes 1-9) mais NON ACTIVÉE — verdict de validation négatif (2026-08-06).**
+Le code est complet et testé (411 verts) ; `[mtg].activated=false`. Voir le **VERDICT** ci-dessous.
+
+---
+
+## ⛔ VERDICT DE VALIDATION (2026-08-06) — 0682 non viable pour la France
+
+Après implémentation complète et activation brève en production, la confrontation à la vraie donnée
+**invalide l'usage du 0682 pour la détection sur la France**. Preuves :
+
+- **Feu de Saumos (34 000 ha), jours de pic 22-24/07** : au foyer même, sur une fenêtre 14×14 km,
+  `fire_result = 0` **et** `fire_probability = 0,00` sur **tous** les slots. **Zéro signal** — pas même
+  sous le seuil de classe.
+- **Feux intenses du 06/08** : Piémont (31 MW) et Crau (19 MW) **non détectés**.
+- **Ce que le 0682 produit en France** : surtout du **glint solaire côtier de midi** (bande de pixels à
+  latitude constante le long des côtes, qui croît/reflue avec le soleil, classe 1 basse probabilité).
+
+**Cause.** MTG est à **0° de longitude** ; à la latitude France l'angle de visée est **très oblique** →
+pixel ~2 km étiré, sensibilité et géolocalisation dégradées. Le produit *Active Fire* est calibré pour
+l'**Afrique** (quasi-nadir, grands feux de savane), pas pour les feux de forêt européens dont le front
+flammant reste **sous le seuil** de détection.
+
+**Décision.** On **n'active pas** (`activated=false`). Le code (ingestion, déprojection geos, confirmation,
+candidats, carte « signaux », archive, daemon) est **conservé dormant** : il est correct et testé, c'est la
+**donnée** qui est inadéquate. Il se rebranche tel quel si un **produit MTG plus apte** devient disponible et
+licencié en public (LSA SAF FRP passé opérationnel, ou un FIR amélioré aux hautes latitudes). Rien à jeter,
+verdict acté. Outils de re-vérification : `scripts/mtg_discover.py`, `scripts/mtg_validate_saumos.py`.
 
 ---
 
