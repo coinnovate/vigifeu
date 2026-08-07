@@ -40,14 +40,51 @@ identifiantes. Toute demande de rectification ou de retrait peut être adressée
 
 <section>
 <h2>Données personnelles et mesure d'audience</h2>
-<p>{{ marque }} ne demande aucune inscription et ne collecte aucune donnée personnelle
-identifiante. La fréquentation est mesurée avec <strong>Umami</strong>, une solution
-auto-hébergée <strong>sans cookie</strong> et sans traceur publicitaire : seules des
-statistiques agrégées et anonymes (pages vues, provenance) sont produites, sans profilage
-ni transfert à des tiers.</p>
+<p>La <strong>simple consultation</strong> de {{ marque }} ne demande aucune inscription et
+ne collecte aucune donnée personnelle identifiante. La fréquentation est mesurée avec
+<strong>Umami</strong>, une solution auto-hébergée <strong>sans cookie</strong> et sans
+traceur publicitaire : seules des statistiques agrégées et anonymes (pages vues, provenance)
+sont produites, sans profilage ni transfert à des tiers.</p>
+{% if contrib_active %}
+{#
+  PROJET — À FAIRE VALIDER PAR UN JURISTE avant activation (RGPD, bases légales, durées,
+  droits, hébergement UE ; juridiction éditeur/hébergeur en Allemagne). Reflète exactement le
+  traitement implémenté (Spec 10) : photo + captured_at + distance + commune du hotspot,
+  e-mail optionnel non vérifié, IP hachée salée ; position auteur jamais conservée.
+#}
+<h3>Contributions de photos</h3>
+<p>Si vous choisissez d'envoyer une photo, {{ marque }} traite :</p>
+<ul>
+<li><strong>la photo</strong>, sa date de prise de vue, la distance au feu et la commune du
+point du feu — <strong>votre position exacte n'est jamais conservée</strong> ;</li>
+<li><strong>votre adresse e-mail</strong>, si vous la renseignez : facultative, non vérifiée,
+utilisée uniquement pour vous prévenir d'une éventuelle publication ;</li>
+<li><strong>votre adresse IP sous forme hachée</strong> (empreinte salée, jamais conservée en
+clair), à seule fin de prévenir les abus.</li>
+</ul>
+<p><strong>Bases légales</strong> : votre consentement (photo, e-mail) et l'intérêt légitime
+de {{ marque }} à prévenir les abus (empreinte IP). <strong>Durées</strong> : une photo
+refusée et ses données associées sont supprimées au plus tard <strong>six mois</strong> après
+la décision ; l'e-mail d'une photo publiée est effacé après <strong>trois mois</strong> ; les
+photos publiées sont conservées tant qu'elles restent en ligne. <strong>Vos droits</strong>
+(accès, rectification, effacement, opposition) s'exercent auprès de
+<a href="mailto:{{ legal.editeur_email }}">{{ legal.editeur_email }}</a>. Les données sont
+hébergées dans l'Union européenne et ne sont transmises à aucun tiers à des fins commerciales.</p>
+{% endif %}
 <p>Pour toute question relative aux données, écrivez à
 <a href="mailto:{{ legal.editeur_email }}">{{ legal.editeur_email }}</a>.</p>
 </section>
+{% if contrib_active %}
+<section>
+<h2>Contenus publiés par les visiteurs</h2>
+<p>{{ marque }} héberge des photographies proposées par des visiteurs, publiées uniquement
+après <strong>modération humaine</strong> ; l'éditeur n'en est pas l'auteur. Conformément à la
+réglementation applicable, tout contenu manifestement illicite peut être signalé à
+<a href="mailto:{{ legal.editeur_email }}">{{ legal.editeur_email }}</a> et sera
+<strong>retiré promptement</strong>. Les photos sont publiées de manière anonyme et signalées
+« photo de visiteur — non vérifiée ».</p>
+</section>
+{% endif %}
 
 <section>
 <h2>Nature du service et responsabilité</h2>

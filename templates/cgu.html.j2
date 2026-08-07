@@ -21,5 +21,45 @@ l'absence de risque. En cas de danger, référez-vous aux autorités compétente
 <a href="/methodologie/">méthodologie</a>. La réutilisation des faits publiés est
 encouragée en citant la date d'observation et le lien de la page.</p>
 </section>
+{% if contrib_active %}
+{#
+  PROJET — À FAIRE VALIDER PAR UN JURISTE avant activation. Points ouverts : juridiction
+  applicable (éditeur + hébergeur en Allemagne → LCEN française vs DDG/TMG allemand), droit à
+  l'image, mineurs, portée exacte de la licence. Cohérent avec la décision « licence d'affichage
+  non exclusive » (Spec 10). Version opposable des conditions : {{ cgu_version }}.
+#}
+<section>
+<h2>Contributions de photos</h2>
+<p>{{ marque }} permet aux visiteurs de proposer une <strong>photographie prise en direct,
+sur place</strong>, à proximité d'un feu détecté. La prise de vue se fait impérativement
+<strong>à distance de sécurité</strong> : ne vous approchez jamais des flammes ni des zones
+d'intervention. {{ marque }} n'est pas un service de secours — en cas d'urgence, appelez le
+18 ou le 112.</p>
+
+<h3>Vos engagements</h3>
+<p>En envoyant une photo, vous déclarez être <strong>majeur</strong>, en être
+l'<strong>auteur</strong>, et garantir qu'elle ne fait apparaître <strong>aucune personne ni
+plaque d'immatriculation identifiable</strong>, ni aucun contenu illicite, violent ou portant
+atteinte aux droits de tiers.</p>
+
+<h3>Licence accordée</h3>
+<p>Vous <strong>conservez l'intégralité de vos droits</strong> sur la photo. Vous accordez
+uniquement à {{ marque }} une <strong>licence non exclusive et gratuite d'affichage</strong>
+sur le site, pour la durée de sa publication ; aucune autre réutilisation n'en est faite. Les
+photos sont publiées de manière <strong>anonyme</strong> (sans votre nom).</p>
+
+<h3>Modération</h3>
+<p>Toute photo est examinée <strong>avant publication</strong>. {{ marque }} peut la refuser
+ou la retirer à tout moment, sans avoir à se justifier : la publication n'est jamais garantie.
+Une photo publiée est signalée « photo de visiteur — non vérifiée ».</p>
+
+<h3>Signalement et retrait</h3>
+<p>Toute photo peut être signalée ; elle est alors retirée de l'affichage le temps d'un
+réexamen. Pour signaler ou demander le retrait d'une photo vous concernant, écrivez à
+<a href="mailto:{{ legal.editeur_email }}">{{ legal.editeur_email }}</a>.</p>
+
+<p class="cgu-version">Version des conditions de contribution : {{ cgu_version }}.</p>
+</section>
+{% endif %}
 </article>
 {% endblock %}

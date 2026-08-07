@@ -100,16 +100,25 @@ def build_static_pages(conn: sqlite3.Connection, config: dict, env: Environment)
     write_atomic(site / "methodologie" / "index.html", env.get_template("methodologie.html.j2").render(**ctx))
     n += 1
 
+    # Le canal contributif (Spec 10) ajoute des sections légales (données perso, hébergeur de
+    # contenus visiteurs) affichées seulement quand il est activé — le site reste exact des
+    # deux côtés du flag.
+    contrib_active = config.get("contributions", {}).get("activated", False)
+
     ctx = _base_ctx(config, slug="mentions-legales", title="Mentions légales",
                     description="Éditeur, hébergeur et sources de données du site.",
                     graph=jsonld.render_graph(org))
     ctx["legal"] = config.get("legal", {})
+    ctx["contrib_active"] = contrib_active
     write_atomic(site / "mentions-legales" / "index.html", env.get_template("mentions.html.j2").render(**ctx))
     n += 1
 
     ctx = _base_ctx(config, slug="cgu", title="Conditions d'utilisation",
                     description="Un outil de veille, pas un système d'alerte.",
                     graph=jsonld.render_graph(org))
+    ctx["legal"] = config.get("legal", {})
+    ctx["contrib_active"] = contrib_active
+    ctx["cgu_version"] = config.get("contributions", {}).get("cgu_version_courante", "")
     write_atomic(site / "cgu" / "index.html", env.get_template("cgu.html.j2").render(**ctx))
     n += 1
 
