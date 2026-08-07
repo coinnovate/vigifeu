@@ -30,6 +30,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vigifeu"]
+artifacts = ["src/vigifeu/contrib/widget.js"]  # snippet client servi par /api/contrib/widget.js
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

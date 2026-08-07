@@ -115,6 +115,165 @@ def feux_proches_endpoint():
     return jsonify({"feux": feux})
 
 
+# --- Exposition : widget (fiche feu + page commune) ----------------------
+
+def _page_param() -> int:
+    """Numéro de page 1-based, borné (paramètre de pagination du widget, §7.1)."""
+    try:
+        return max(1, int(request.args.get("page", 1)))
+    except ValueError:
+        return 1
+
+
+def _photo_json(r, *, feu_public_id: str | None) -> dict:
+    """Sérialise une contribution publiée (contrat §7.1). URLs opaques (public_id)."""
+    pid = r["public_id"]
+    return {
+        "public_id": pid,
+        "url": f"/api/contrib/img/{pid}",
+        "thumb_url": f"/api/contrib/img/{pid}?t=thumb",
+        "captured_at": r["captured_at"],
+        "largeur": r["largeur"], "hauteur": r["hauteur"],
+        "thumb_largeur": r["thumb_largeur"], "thumb_hauteur": r["thumb_hauteur"],
+        "feu": {"public_id": feu_public_id},
+    }
+
+
+def _reponse_photos(config: dict, total: int, page: int, photos: list) -> Response:
+    """JSON paginé avec Cache-Control COURT (publications/retraits propagés vite, §7.2)."""
+    resp = jsonify({"total": total, "page": page, "photos": photos})
+    resp.headers["Cache-Control"] = f"public, max-age={config['contributions']['photos_json_ttl_s']}"
+    return resp
+
+
+def _fire_event_id(config: dict, public_id: str) -> int | None:
+    """public_id feu (socle) → id interne, en lecture seule. None si socle absente/inconnu."""
+    try:
+        sc = connect_socle_readonly(config["general"]["db_path"])
+    except FileNotFoundError:
+        return None
+    try:
+        r = sc.execute("SELECT id FROM fire_event WHERE public_id=?", (public_id,)).fetchone()
+        return r["id"] if r else None
+    finally:
+        sc.close()
+
+
+def _public_ids_feux(config: dict, ids: set[int]) -> dict[int, str]:
+    """{fire_event_id: public_id} pour un lot d'ids (vue commune : lier chaque photo à son feu)."""
+    if not ids:
+        return {}
+    try:
+        sc = connect_socle_readonly(config["general"]["db_path"])
+    except FileNotFoundError:
+        return {}
+    try:
+        marques = ",".join("?" * len(ids))
+        rows = sc.execute(
+            f"SELECT id, public_id FROM fire_event WHERE id IN ({marques})", tuple(ids)
+        ).fetchall()
+        return {r["id"]: r["public_id"] for r in rows}
+    finally:
+        sc.close()
+
+
+@bp.get("/feu/<public_id>/photos")
+def photos_feu(public_id):
+    """Photos publiées d'un feu (§7.1) : tri captured_at desc, paginé. `publiee` uniquement."""
+    config = current_app.config["VIGIFEU"]
+    page = _page_param()
+    taille = config["contributions"]["photos_page_taille"]
+
+    fid = _fire_event_id(config, public_id)
+    if fid is None:
+        return _reponse_photos(config, 0, page, [])  # socle absente/feu inconnu → vide
+
+    cc = connect_contrib(config["contributions"]["db_path"])
+    try:
+        total = cc.execute(
+            "SELECT COUNT(*) AS n FROM contribution WHERE fire_event_id=? AND statut='publiee'",
+            (fid,),
+        ).fetchone()["n"]
+        rows = cc.execute(
+            "SELECT * FROM contribution WHERE fire_event_id=? AND statut='publiee' "
+            "ORDER BY captured_at DESC, id DESC LIMIT ? OFFSET ?",
+            (fid, taille, (page - 1) * taille),
+        ).fetchall()
+    finally:
+        cc.close()
+    photos = [_photo_json(r, feu_public_id=public_id) for r in rows]
+    return _reponse_photos(config, total, page, photos)
+
+
+@bp.get("/commune/<code_insee>/photos")
+def photos_commune(code_insee):
+    """Photos publiées de tous les feux d'une commune (§7.4) : même tri/pagination/cache."""
+    config = current_app.config["VIGIFEU"]
+    page = _page_param()
+    taille = config["contributions"]["photos_page_taille"]
+
+    cc = connect_contrib(config["contributions"]["db_path"])
+    try:
+        total = cc.execute(
+            "SELECT COUNT(*) AS n FROM contribution WHERE code_insee=? AND statut='publiee'",
+            (code_insee,),
+        ).fetchone()["n"]
+        rows = cc.execute(
+            "SELECT * FROM contribution WHERE code_insee=? AND statut='publiee' "
+            "ORDER BY captured_at DESC, id DESC LIMIT ? OFFSET ?",
+            (code_insee, taille, (page - 1) * taille),
+        ).fetchall()
+    finally:
+        cc.close()
+
+    mapping = _public_ids_feux(config, {r["fire_event_id"] for r in rows if r["fire_event_id"]})
+    photos = [_photo_json(r, feu_public_id=mapping.get(r["fire_event_id"])) for r in rows]
+    return _reponse_photos(config, total, page, photos)
+
+
+@bp.get("/img/<public_id>")
+def image_publique(public_id):
+    """Sert une image publiée (§7.2). `?t=thumb` = vignette. Retrait → **410 Gone**.
+
+    Cache long `immutable` (l'URL est liée au public_id, le contenu ne change pas). Une photo
+    dépubliée (signalement retenu) garde sa ligne mais n'est plus `publiee` → 410 (délistage
+    hébergeur). public_id inconnu → 404 (pas d'énumération : ids opaques aléatoires).
+    """
+    config = current_app.config["VIGIFEU"]
+    vignette = request.args.get("t") == "thumb"
+    cc = connect_contrib(config["contributions"]["db_path"])
+    try:
+        r = cc.execute(
+            "SELECT statut, image_path, thumb_path FROM contribution WHERE public_id=?",
+            (public_id,),
+        ).fetchone()
+    finally:
+        cc.close()
+
+    if r is None:
+        return Response("introuvable", 404)
+    if r["statut"] != "publiee":
+        return Response("retirée", 410)  # publiee → rejetee/purgee : délistage (§7.2)
+    chemin = r["thumb_path"] if vignette else r["image_path"]
+    if not chemin or not os.path.exists(chemin):
+        return Response("introuvable", 404)
+    with open(chemin, "rb") as f:
+        octets = f.read()
+    ttl = config["contributions"]["image_ttl_s"]
+    return Response(octets, mimetype="image/jpeg",
+                    headers={"Cache-Control": f"public, max-age={ttl}, immutable"})
+
+
+@bp.get("/widget.js")
+def widget_js():
+    """Sert le snippet client du widget (même origine). Cache long (asset versionnable)."""
+    chemin = os.path.join(os.path.dirname(__file__), "widget.js")
+    with open(chemin, "rb") as f:
+        code = f.read()
+    return Response(code, mimetype="application/javascript",
+                    headers={"Cache-Control": "public, max-age=3600"})
+
+
 @bp.post("/deposer")
 def deposer():
     """Dépôt d'une contribution photo (§4.6) : encode, ancre, commune, quota IP → `soumise`.
