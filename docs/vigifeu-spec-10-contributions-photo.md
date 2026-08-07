@@ -1,6 +1,6 @@
 # Vigifeu — Spécification 10 : Contributions photo du public
 
-**Version :** 0.5 (2026-08-07 — mail contributeur optionnel/non vérifié ; modération par mail)
+**Version :** 0.6 (2026-08-07 — choix techniques : Flask, WAL read-only, smtplib)
 **Références :** Spec 01 (P1 immuabilité du **socle observation**, P4 catégories, §3.1 `hotspot_raw`,
 §3.7 `ingestion_run`, §4.1 `fire_event`), Spec 02 (§2 cycle de vie, §9 monitoring — pas de cap silencieux),
 Spec 03 (§3.3 fiche feu, §1 libellés), Spec 04 (**générateur statique SEO**), Spec 05 (§0 responsabilité
@@ -92,9 +92,19 @@ site / une autre origine : un **petit service dynamique sous la même origine**.
 **Same-origin = simplification.** Pas de CORS ; CSP quasi inchangée. *(`getUserMedia` exige HTTPS — déjà le
 cas.)*
 
+**Choix techniques (v0.6).** Mini-API = **Flask** (sync, sobre, réutilise Jinja2 pour l'admin + pages de
+confirmation), lancée comme **service systemd distinct** derrière le reverse proxy existant. Envoi de mail =
+**`smtplib` stdlib → relais SMTP** (aucune dépendance nouvelle ; abstrait derrière un `send_mail()` pour
+changer plus tard). *(Correctif : le projet n'a **pas** d'infra mail aujourd'hui — les notifications passent
+par un ping healthchecks.io ; la modération par mail est donc une **infra SMTP nouvelle**, pas une reprise de
+Spec 09.)* Les jobs (auto-filtre §5, purge §9) tournent via l'`apscheduler` **de ce service** (déjà une dép).
+
 **Invariant socle mono-écrivain préservé.** L'API **écrit sa propre base** (`contribution`, `ip_blocklist`)
-et **lit la socle en lecture seule** (WAL) pour « feux proches » ; variante : **read-model** exporté par le
-daemon (§13). La socle reste **mono-écrivain (daemon)**.
+et **lit la socle en lecture seule** — connexion **read-only stricte**, mode **WAL** (N lecteurs + 1 écrivain)
+— pour « feux proches » (requête sur les **feux actifs**, peu nombreux ; distance en pyproj/L93, pas d'index
+spatial requis). La tranche lue est **étroite et stable** (feux actifs + point), documentée comme contrat. Le
+**read-model** exporté par le daemon reste un **repli** si une contention apparaît (improbable en lecture WAL).
+La socle reste **mono-écrivain (daemon)**.
 
 **Auto-filtre & purge = jobs de l'API**, pas du daemon.
 
@@ -256,7 +266,8 @@ route authentifiée** ; `moderee_par`/`moderee_at`/`motif_rejet` renseignés ; *
 au contributeur si `email` fourni ; **signalement public** (`POST /api/contrib/signaler`) → repasse en
 `a_moderer` / `rejetee`.
 
-*(La modération par mail peut réutiliser l'infra d'envoi de la Spec 09.)*
+*(Envoi via `smtplib` stdlib → relais SMTP, derrière un `send_mail()` réutilisable — infra mail nouvelle, cf.
+§2.)*
 
 ---
 
@@ -333,9 +344,9 @@ purge_rejetees_mois = 6
 purge_email_publiee_mois = 3
 ```
 
-Secrets d'env (hors dépôt) : `CONTRIB_HASH_SECRET` (HMAC IP **et** tokens d'action), SMTP,
-`CONTRIB_MODERATION_EMAIL` (destinataire des mails de modération), `HEALTHCHECK_CONTRIB_URL`, auth
-`/admin/contrib`.
+Secrets d'env (hors dépôt) : `CONTRIB_HASH_SECRET` (HMAC IP **et** tokens d'action),
+`CONTRIB_SMTP_HOST/PORT/USER/PASSWORD` (relais SMTP), `CONTRIB_MODERATION_EMAIL` (destinataire des mails de
+modération), `HEALTHCHECK_CONTRIB_URL` (dead-man switch, comme les autres jobs), auth `/admin/contrib`.
 
 ---
 
@@ -364,8 +375,9 @@ Revue juridique recommandée avant ouverture large.
 
 ## 12. Étapes de développement (petits pas, tests au fil, commits FR)
 
-1. **Squelette API** — service sous `/api/contrib`, base contributions + migration (`contribution` + index
-   unique `image_sha256`, `ip_blocklist`), lecture read-only socle. `pytest` vert (8 socle intacts).
+1. **Squelette API** — service **Flask** (systemd, derrière le reverse proxy) monté sous `/api/contrib`, base
+   contributions + migration (`contribution` + index unique `image_sha256`, `ip_blocklist`), **connexion
+   read-only** à la socle (WAL). `pytest` vert (8 socle intacts).
 2. **Encodage image** — blob → resize + ré-encodage JPEG, `sha256`, écriture hors répertoire public. Test :
    JPEG borné, **sans EXIF**.
 3. **Feux proches** — helper « hotspots < `rayon_max_km` → `fire_event` » + endpoint. Test : 5 km → feu ;
@@ -416,10 +428,12 @@ verts.
 - **Anti-abus** = quota IP + **blacklist IP** (manuelle & auto).
 - **Purge rejetées 6 mois** (photo + perso détruites, squelette LCEN) ; **publiées conservées** ; email purgé.
 - **Dérogation P1 cloisonnée**.
+- **Techno = Flask** (sync, service systemd derrière le reverse proxy, réutilise Jinja2) — 2026-08-07.
+- **Accès socle = WAL direct, read-only strict** (feux actifs, distance pyproj) ; read-model = repli — 2026-08-07.
+- **Mail = `smtplib` stdlib → relais SMTP**, derrière `send_mail()` ; **infra nouvelle** (le projet n'envoyait
+  pas d'email, seulement des pings healthchecks.io) — 2026-08-07.
 
 **`OUVERT` :**
-- **Accès API→socle** : lecture WAL directe vs **read-model** exporté par le daemon.
-- **Techno mini-API** (FastAPI/Flask…) + intégration reverse proxy + infra mail (réutiliser Spec 09 ?).
 - **Hotspot pas encore cluster** au dépôt : accepter + rattacher (défaut) vs refuser.
 - **Fraîcheur du hotspot** : n'accepter que près d'un hotspot **récent** (< N h) vs laisser la modération.
 - **SEO** : « cuisson » future des photos dans le HTML (indexation, Open Graph).
