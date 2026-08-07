@@ -74,9 +74,11 @@ def write_carte(conn, config, env, site_dir) -> Path:
     path = write_atomic(page_path(site_dir, "carte", "carte"), render_carte(env, ctx))
     gj = json.dumps(national_geojson(conn, config), ensure_ascii=False)
     write_atomic(Path(site_dir) / "feux.geojson", gj)
-    # Calque « signaux géostationnaires en attente » (Spec 07 §8) — fichier SÉPARÉ, non cliquable.
-    sig = json.dumps(geo_signals_geojson(conn, config), ensure_ascii=False)
-    write_atomic(Path(site_dir) / "signaux.geojson", sig)
+    # Calque « signaux géostationnaires en attente » (Spec 07 §8) — fichier SÉPARÉ, non cliquable,
+    # écrit UNIQUEMENT si MTG est activé (0682 abandonné → aucun fichier ni UI fantôme, §13).
+    if config.get("mtg", {}).get("activated", False):
+        sig = json.dumps(geo_signals_geojson(conn, config), ensure_ascii=False)
+        write_atomic(Path(site_dir) / "signaux.geojson", sig)
     return path
 
 

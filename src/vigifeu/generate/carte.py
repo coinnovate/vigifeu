@@ -26,6 +26,7 @@ def _dt(iso: str) -> datetime:
 
 def load_carte_context(conn: sqlite3.Connection, config: dict) -> dict:
     gen = config["generate"]
+    gen_mtg = config.get("mtg", {}).get("activated", False)   # calque MTG seulement si activé (Spec 07 §)
     derniere_obs = conn.execute("SELECT MAX(acq_at) AS m FROM hotspot_raw").fetchone()["m"]
     # Seuil « nouveau » mesuré depuis la DERNIÈRE OBSERVATION (donnée), jamais l'heure de
     # génération (P0 : pas d'horodatage de build dans la sortie, Spec 04 §9).
@@ -68,10 +69,11 @@ def load_carte_context(conn: sqlite3.Connection, config: dict) -> dict:
         "fil_ariane": [{"label": "Accueil", "href": None}],
         "feux": feux,
         "geojson_href": "/feux.geojson",
-        # Calque « signaux géostationnaires en attente » (Spec 07 §8) : fichier séparé, calque
-        # désactivable non cliquable (carte.js). Libellé de la case via le lexique.
-        "signaux_href": "/signaux.geojson",
-        "signaux_toggle": fr.toggle_signaux(),
+        # Calque « signaux géostationnaires en attente » (Spec 07 §8) — UNIQUEMENT si MTG est activé.
+        # Le 0682 étant abandonné (verdict §), `activated=false` ⇒ ni case, ni data-signals, ni fichier
+        # (aucune UI fantôme). Revient tout seul si un produit MTG apte est rebranché (§13).
+        "signaux_href": "/signaux.geojson" if gen_mtg else None,
+        "signaux_toggle": fr.toggle_signaux() if gen_mtg else None,
         "latence_texte": fr.bloc_latence(derniere_obs) if derniere_obs else None,
         "attributions": fr.bloc_attributions(referentiel_millesime=gen["referentiel_millesime"]),
     }
