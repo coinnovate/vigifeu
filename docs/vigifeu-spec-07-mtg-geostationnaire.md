@@ -18,25 +18,34 @@ Le code est complet et testé (411 verts) ; `[mtg].activated=false`. Voir le **V
 ## ⛔ VERDICT DE VALIDATION (2026-08-06) — 0682 non viable pour la France
 
 Après implémentation complète et activation brève en production, la confrontation à la vraie donnée
-**invalide l'usage du 0682 pour la détection sur la France**. Preuves :
+**invalide l'usage du 0682 pour la détection sur la France**. Preuves, **vérifiées contre notre propre
+vérité terrain VIIRS** (pas supposées) :
 
-- **Feu de Saumos (34 000 ha), jours de pic 22-24/07** : au foyer même, sur une fenêtre 14×14 km,
-  `fire_result = 0` **et** `fire_probability = 0,00` sur **tous** les slots. **Zéro signal** — pas même
-  sous le seuil de classe.
+- **Feu de Saumos, jours de pic 22-24/07.** Emprise réelle telle que NOUS l'avons calculée : **811 cellules**,
+  lat 44.71→44.99, lon -1.24→-0.79 (gros feu bien étalé). Sur **toute** cette zone, à chaque slot MTG de
+  l'après-midi, `fire_result = 0` **et** `fire_probability = 0,00`. **Zéro signal** — pas même sous le seuil.
 - **Feux intenses du 06/08** : Piémont (31 MW) et Crau (19 MW) **non détectés**.
-- **Ce que le 0682 produit en France** : surtout du **glint solaire côtier de midi** (bande de pixels à
-  latitude constante le long des côtes, qui croît/reflue avec le soleil, classe 1 basse probabilité).
+- **Ce que le 0682 « détecte » en France n'est pas du feu** : une **bande de ~50 km à latitude constante** le
+  long de la Côte d'Azur, qui croît/reflue avec le soleil de midi (classe 1, basse probabilité). Contre-vérif :
+  **0 hotspot VIIRS** sous cette bande sur 50 km → **artefact** (glint solaire / ligne de balayage), pas un feu.
 
-**Cause.** MTG est à **0° de longitude** ; à la latitude France l'angle de visée est **très oblique** →
-pixel ~2 km étiré, sensibilité et géolocalisation dégradées. Le produit *Active Fire* est calibré pour
-l'**Afrique** (quasi-nadir, grands feux de savane), pas pour les feux de forêt européens dont le front
-flammant reste **sous le seuil** de détection.
+**Ce n'est PAS un bug de notre code.** La déprojection est bonne (le 06/08, nos pixels tombaient à ~5 km des
+hotspots VIIRS ; ici on vise le bon endroit, confirmé par l'emprise ci-dessus ; `fire_probability` est nul,
+donc l'algorithme EUMETSAT a bien évalué le pixel et conclu « pas de feu »).
 
-**Décision.** On **n'active pas** (`activated=false`). Le code (ingestion, déprojection geos, confirmation,
-candidats, carte « signaux », archive, daemon) est **conservé dormant** : il est correct et testé, c'est la
-**donnée** qui est inadéquate. Il se rebranche tel quel si un **produit MTG plus apte** devient disponible et
-licencié en public (LSA SAF FRP passé opérationnel, ou un FIR amélioré aux hautes latitudes). Rien à jeter,
-verdict acté. Outils de re-vérification : `scripts/mtg_discover.py`, `scripts/mtg_validate_saumos.py`.
+**Cause — géométrie orbitale.** MTG voit très bien l'Europe en imagerie ; c'est le *détecteur de feu* qui reste
+muet. MTG est **fixe à 0° de longitude, au-dessus de l'équateur**. Il regarde l'Afrique **au nadir** (pixel
+compact) mais la France **en oblique rasant** → le pixel de ~2 km s'**étire** (≈2×4-6 km) et la chaleur d'un
+front flammant fin (quelques mètres) est **moyennée sous le seuil**. Le produit *Active Fire* est **calibré et
+validé pour l'Afrique** (feux de savane vastes et chauds, vus de haut) ; pour la détection *feu* en Europe, ce
+sont les satellites **défilants** (VIIRS 375 m, qui passent à la verticale) qui font le travail — d'où le socle
+Vigifeu sur FIRMS/VIIRS. « Satellite européen » ≠ « optimisé pour détecter les feux européens ».
+
+**Décision.** On **n'active pas** (`activated=false`, définitif pour le 0682). Tout le code (ingestion,
+déprojection geos, confirmation bidirectionnelle, candidats, carte « signaux », archive, daemon) est
+**conservé DORMANT** : il est correct et testé (411 verts) — c'est la **donnée** qui est inadéquate, pas
+l'implémentation. Rien à jeter : la plomberie se rebranche telle quelle sur un meilleur produit (cf. §13).
+Outils de re-vérification versionnés : `scripts/mtg_discover.py`, `scripts/mtg_validate_saumos.py`.
 
 ---
 
@@ -410,3 +419,36 @@ une fixture MTG **propre** (nouveau dossier `tests/fixtures/mtg/…`), à figer 
    (bulletin presse Spec 09, contribution photo Spec 10) ? — à trancher quand l'amorçage tourne.
 5. **Fixture MTG réelle** : figer un granule 0682 réel dans `tests/fixtures/mtg/` (le `scripts/mtg_discover.py`
    en télécharge un) pour un test d'intégration bout-en-bout, en complément des fixtures synthétiques.
+
+> ⚠️ Les questions 2-5 sont **gelées** par le verdict (⛔ en tête) : le 0682 étant abandonné pour la France,
+> caler `fire_classes` / seuils / fixture n'a plus d'objet **pour ce produit**. Elles ressusciteront, adaptées,
+> le jour où l'on branchera un produit apte (§13).
+
+---
+
+## 13. Perspective — le produit qu'on ATTEND : FRP LSA SAF MTG (à surveiller)
+
+Le 0682 (*Active Fire*, détection binaire) est aveugle à nos feux (verdict ⛔). **La piste géostationnaire n'est
+pas morte pour autant** : il existe un **second produit feu MTG**, distinct et plus prometteur, qu'on **attend**.
+
+- **Quoi** : le **MTG FRP (Fire Radiative Power) du LSA SAF** (Land Surface Analysis SAF). Contrairement au
+  0682 (masque « feu / pas feu » au seuil conservateur), il **restitue une puissance radiative** par un
+  algorithme dédié, potentiellement **plus sensible** aux foyers sous-pixel — donc peut-être capable de capter
+  ce que le 0682 rate. À **vérifier** le jour venu (même méthode : le rejouer sur Saumos) ; ce n'est pas garanti,
+  la géométrie oblique reste un handicap.
+- **Blocage actuel — statut *démonstration*** : EUMETSAT a explicitement indiqué (cf. réponse licence, §3) que
+  ce produit FRP autonome est **pré-opérationnel → interdit d'usage public/opérationnel**. On ne peut donc **pas**
+  le mettre sur `sentifeu.fr` aujourd'hui, même s'il marchait. Mémoire : `eumetsat-mtg-licence`.
+- **Condition de reprise** : quand le FRP LSA SAF passe **« operational »** → mêmes conditions gratuites que le
+  0682 (CC-BY, sans redevance même en B2B) → **utilisable en public**. À ce moment :
+  1. re-vérifier la licence/attribution (§3) ;
+  2. le **rejouer sur Saumos** avec `scripts/mtg_validate_saumos.py` (adapter les noms de variables) — s'il voit
+     le méga-feu, la piste redevient vivante ;
+  3. si concluant, **rebrancher le tuyau dormant** : `[mtg].collection_id` + `[mtg.netcdf]` vers le nouveau
+     produit, réactiver `activated=true`. Toute la machinerie (accès Data Store, déprojection geos, confirmation,
+     candidats, carte « signaux », archive, daemon) est **déjà là et testée** — l'intégration se ferait « en une
+     soirée ».
+
+**En clair** : on garde MTG **en veille documentée**, on **surveille le passage en opérationnel du FRP LSA SAF**,
+et on retentera proprement le moment venu. D'ici là, la référence feu reste **VIIRS/FIRMS** (défilant, vertical,
+adapté à l'Europe).
