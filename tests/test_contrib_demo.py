@@ -151,3 +151,17 @@ def test_depot_demo_envoie_mail_moderation(make):
     assert len(envoyes) == 1
     assert envoyes[0].destinataire == MODEMAIL
     assert "/api/contrib/action/" in envoyes[0].html  # liens d'action signés
+
+
+# --- page de démo ---------------------------------------------------------
+
+def test_page_demo_servie_en_mode_demo(make):
+    r = make().test_client().get("/api/contrib/demo")
+    assert r.status_code == 200 and "text/html" in r.content_type
+    assert b"data-sentifeu-depot" in r.data          # bouton de dépôt
+    assert b"/api/contrib/depot.js" in r.data        # charge le parcours
+
+
+def test_page_demo_absente_hors_mode(make):
+    r = make(mode_demo=False).test_client().get("/api/contrib/demo")
+    assert r.status_code == 404

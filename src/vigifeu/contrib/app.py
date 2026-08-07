@@ -286,6 +286,33 @@ def asset_js(nom):
                     headers={"Cache-Control": "public, max-age=3600"})
 
 
+_DEMO_HTML = """<!doctype html>
+<html lang=fr><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width, initial-scale=1">
+<title>Démo dépôt — Sentifeu</title>
+<style>body{font-family:system-ui;max-width:640px;margin:2rem auto;padding:0 1rem;line-height:1.5}
+button[data-sentifeu-depot]{font:inherit;padding:.9rem 1.3rem;border-radius:10px;border:0;
+background:#c1440e;color:#fff}</style></head><body>
+<h1>Démo — dépôt d'une photo</h1>
+<p><b>Mode démo actif.</b> Un « feu de test » est proposé à votre position : déroulez le
+parcours (géolocalisation → caméra → consentement → envoi). La photo part ensuite en
+modération.</p>
+<p><button type=button data-sentifeu-depot data-lieu="démo">Déposer une photo</button></p>
+<p style="color:#888;font-size:.85rem">À ouvrir sur <b>mobile</b> (caméra) en <b>HTTPS</b>.
+Après envoi, retrouvez la contribution sur <a href="/admin/contrib">/admin/contrib</a>.</p>
+<script src="/api/contrib/depot.js" defer></script>
+</body></html>"""
+
+
+@bp.get("/demo")
+def demo_page():
+    """Page de test du parcours de dépôt — servie UNIQUEMENT en `mode_demo` (jamais en prod)."""
+    if not current_app.config["VIGIFEU"]["contributions"].get("mode_demo", False):
+        return Response("introuvable", 404)
+    return Response(_DEMO_HTML, mimetype="text/html",
+                    headers={"Cache-Control": "no-store"})
+
+
 @bp.post("/deposer")
 def deposer():
     """Dépôt d'une contribution photo (§4.6) : encode, ancre, commune, quota IP → `soumise`.
