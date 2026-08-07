@@ -177,6 +177,7 @@ def test_depot_js_servi(make):
     assert "javascript" in r.mimetype
     assert b"SentifeuDepot" in r.data
     assert b"getUserMedia" in r.data  # capture in-app stricte
+    assert b"estMobile" in r.data     # détection PC → invitation mobile (§0)
 
 
 def test_asset_js_inconnu_404(make):

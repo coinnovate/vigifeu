@@ -93,6 +93,28 @@
     return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
   }
 
+  function estMobile() {
+    // Canal MOBILE-TERRAIN (§0) : sur PC la géoloc est imprécise et la « caméra » est une
+    // webcam → dépôt sans valeur. On invite plutôt à passer sur téléphone.
+    if (navigator.userAgentData && typeof navigator.userAgentData.mobile === "boolean") {
+      return navigator.userAgentData.mobile;
+    }
+    return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+  }
+
+  function etapeDesktop(modal) {
+    modal.vider();
+    modal.corps.appendChild(el("h2", null, "Depuis votre téléphone"));
+    modal.corps.appendChild(el("p", null,
+      "Pour garantir une photo prise sur place, le dépôt se fait depuis un téléphone, " +
+      "près du feu. Ouvrez cette page sur votre mobile :"));
+    var lien = el("p");
+    var a = el("a", { href: window.location.href });
+    a.textContent = window.location.href;
+    lien.appendChild(a);
+    modal.corps.appendChild(lien);
+  }
+
   function geolocaliser() {
     return new Promise(function (resolve, reject) {
       if (!navigator.geolocation) { reject(new Error("no-geo")); return; }
@@ -243,6 +265,7 @@
   function ouvrir(opts) {
     opts = opts || {};
     var modal = Modal();
+    if (!estMobile()) { etapeDesktop(modal); return; }       // PC → invitation mobile (§0)
     if (!captureDisponible()) { etapeRepliInApp(modal); return; }
     message(modal, "Localisation…", "Autorisez la géolocalisation pour trouver le feu proche.");
     geolocaliser().then(
