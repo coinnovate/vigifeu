@@ -24,10 +24,11 @@ from flask import Blueprint, Flask, Response, current_app, jsonify, request
 from vigifeu.contrib.db import connect_contrib, connect_socle_readonly, migrate_contrib
 from vigifeu.contrib.images import ImageInvalide, ecrire_paire, encoder_image
 from vigifeu.contrib.ip import client_ip, hash_ip, ip_bloquee, quota_atteint
-from vigifeu.contrib.mail import mail_moderation, mail_publication
+from vigifeu.contrib.jobs import envoyer_mail_moderation
+from vigifeu.contrib.mail import mail_publication
 from vigifeu.contrib.moderation import blacklister, publier, rejeter, signaler
 from vigifeu.contrib.socle import commune_du_point, feux_proches, valider_ancre
-from vigifeu.contrib.tokens import creer_token, verifier_token
+from vigifeu.contrib.tokens import verifier_token
 from vigifeu.model.db import current_version, load_config
 
 bp = Blueprint("contrib", __name__, url_prefix="/api/contrib")
@@ -492,38 +493,16 @@ def _notifier_publication(config: dict, cc: sqlite3.Connection, out: dict, cid: 
 
 
 def _notifier_moderation(config: dict, cc: sqlite3.Connection, cid: int) -> None:
-    """Envoie le mail de modération (vignette + liens signés) à l'entrée en `a_moderer` (§6).
+    """Mail de modération à l'entrée en `a_moderer` (§6) — délègue au helper pur (jobs.py).
 
-    Réutilisable par le futur worker daemon. N'échoue jamais la requête ; ne fait rien si le
-    mailer ou le destinataire (`CONTRIB_MODERATION_EMAIL`) ne sont pas configurés.
+    Même déclencheur que le worker auto-filtre : secrets/mailer lus depuis la config de l'app.
     """
-    mailer = current_app.config.get("CONTRIB_MAILER")
-    dest = current_app.config.get("CONTRIB_MODERATION_EMAIL")
-    secret = current_app.config.get("CONTRIB_HASH_SECRET")
-    if not (mailer and dest and secret):
-        return
-    r = cc.execute(
-        "SELECT thumb_path, captured_at, distance_km, score_nsfw, score_feu "
-        "FROM contribution WHERE id=?", (cid,)
-    ).fetchone()
-    if r is None:
-        return
-    vignette = b""
-    if r["thumb_path"] and os.path.exists(r["thumb_path"]):
-        with open(r["thumb_path"], "rb") as f:
-            vignette = f.read()
-    ttl = config["contributions"]["action_token_ttl_h"]
-    tokens = {a: creer_token(cid, a, secret=secret, ttl_h=ttl)
-              for a in ("publier", "rejeter", "blacklister")}
-    try:
-        mailer.envoyer(mail_moderation(
-            destinataire=dest, base_url=config["generate"]["base_url"], tokens=tokens,
-            vignette=vignette, feu_public_id=_feu_public_id(config, cc, cid),
-            captured_at=r["captured_at"], distance_km=r["distance_km"],
-            score_nsfw=r["score_nsfw"], score_feu=r["score_feu"],
-        ))
-    except Exception:  # pragma: no cover - dépend du relais SMTP
-        current_app.logger.warning("mail de modération non envoyé", exc_info=True)
+    envoyer_mail_moderation(
+        config, cc, cid,
+        mailer=current_app.config.get("CONTRIB_MAILER"),
+        dest=current_app.config.get("CONTRIB_MODERATION_EMAIL"),
+        secret=current_app.config.get("CONTRIB_HASH_SECRET"),
+    )
 
 
 @bp.get("/action/<token>")

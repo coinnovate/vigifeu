@@ -108,7 +108,9 @@ def test_trois_verdicts_et_transitions(cc, tmp_path, config):
     })
     res = filtrer_lot(cc, config, faux)
 
-    assert res == {"vues": 3, "traitees": 3, "a_moderer": 1, "auto_rejetee": 2, "erreurs": 0}
+    assert res["vues"] == 3 and res["traitees"] == 3
+    assert res["a_moderer"] == 1 and res["auto_rejetee"] == 2 and res["erreurs"] == 0
+    assert res["a_moderer_ids"] == [id_ok]  # l'unique passée en file humaine
     statuts = {
         r["id"]: r["statut"]
         for r in cc.execute("SELECT id, statut FROM contribution").fetchall()

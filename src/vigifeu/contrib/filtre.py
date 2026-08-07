@@ -77,7 +77,8 @@ def filtrer_lot(
         (limite,),
     ).fetchall()
 
-    res = {"vues": len(rows), "traitees": 0, "a_moderer": 0, "auto_rejetee": 0, "erreurs": 0}
+    res = {"vues": len(rows), "traitees": 0, "a_moderer": 0, "auto_rejetee": 0,
+           "erreurs": 0, "a_moderer_ids": []}
     for r in rows:
         try:
             raw = Path(r["image_path"]).read_bytes()
@@ -100,6 +101,8 @@ def filtrer_lot(
         )
         res["traitees"] += 1
         res[statut] += 1
+        if statut == "a_moderer":
+            res["a_moderer_ids"].append(r["id"])  # cibles du mail de modération (§6)
 
     cc.commit()
     return res
