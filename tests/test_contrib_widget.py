@@ -168,3 +168,17 @@ def test_widget_js_servi(make):
     assert r.status_code == 200
     assert "javascript" in r.mimetype
     assert b"SentifeuPhotos" in r.data
+
+
+def test_depot_js_servi(make):
+    app = make()
+    r = app.test_client().get("/api/contrib/depot.js")
+    assert r.status_code == 200
+    assert "javascript" in r.mimetype
+    assert b"SentifeuDepot" in r.data
+    assert b"getUserMedia" in r.data  # capture in-app stricte
+
+
+def test_asset_js_inconnu_404(make):
+    app = make()
+    assert app.test_client().get("/api/contrib/inexistant.js").status_code == 404

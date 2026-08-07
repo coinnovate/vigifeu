@@ -264,10 +264,16 @@ def image_publique(public_id):
                     headers={"Cache-Control": f"public, max-age={ttl}, immutable"})
 
 
-@bp.get("/widget.js")
-def widget_js():
-    """Sert le snippet client du widget (même origine). Cache long (asset versionnable)."""
-    chemin = os.path.join(os.path.dirname(__file__), "widget.js")
+_ASSETS_JS = {"widget.js", "depot.js"}  # snippets clients servis same-origin (§7 / §4)
+
+
+@bp.get("/<nom>.js")
+def asset_js(nom):
+    """Sert un snippet client (widget d'affichage, parcours de dépôt). Cache long, asset figé."""
+    fichier = f"{nom}.js"
+    if fichier not in _ASSETS_JS:
+        return Response("introuvable", 404)
+    chemin = os.path.join(os.path.dirname(__file__), fichier)
     with open(chemin, "rb") as f:
         code = f.read()
     return Response(code, mimetype="application/javascript",
