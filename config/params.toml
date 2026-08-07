@@ -485,6 +485,10 @@ active = true
 # (plan §1.1). `activated` reste OFF tant que le parcours + la modération ne sont pas validés
 # bout-en-bout (repasser à false désactive le canal sans rien casser).
 activated = false
+mode_demo = false                        # DÉMO/RECETTE UNIQUEMENT (jamais true en prod) : synthétise un
+                                         # « feu de test » à la position de l'appareil et fait passer le
+                                         # dépôt direct en a_moderer → permet de tester tout le parcours
+                                         # (dépôt → modération → admin) sans feu réel à proximité.
 db_path = "data/contributions.db"       # base propre au canal (distincte de general.db_path)
 rayon_max_km = 10.0                      # pas de hotspot en deçà → refus (§4) ; ancre = géoloc live
 max_px = 1600                            # image d'affichage (lightbox)
