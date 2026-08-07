@@ -1,6 +1,6 @@
 # Vigifeu — Spécification 10 : Contributions photo du public
 
-**Version :** 0.6 (2026-08-07 — choix techniques : Flask, WAL read-only, smtplib)
+**Version :** 0.7 (2026-08-07 — affichage détaillé : contrat API, vignettes, cache ; lien + onglet commune)
 **Références :** Spec 01 (P1 immuabilité du **socle observation**, P4 catégories, §3.1 `hotspot_raw`,
 §3.7 `ingestion_run`, §4.1 `fire_event`), Spec 02 (§2 cycle de vie, §9 monitoring — pas de cap silencieux),
 Spec 03 (§3.3 fiche feu, §1 libellés), Spec 04 (**générateur statique SEO**), Spec 05 (§0 responsabilité
@@ -10,7 +10,8 @@ Spec 03 (§3.3 fiche feu, §1 libellés), Spec 04 (**générateur statique SEO**
 d'upload). Dépôt + affichage (widget) sur **sentifeu.fr** ; le dynamique est porté par une **mini-API
 same-origin** (`sentifeu.fr/api/contrib/…`). Parcours : géoloc → feu à proximité (< 10 km, **présélectionné
 si on vient d'une page feu**) → **photo prise en direct** → **email optionnel** → **file de modération** →
-publication → widget sur la fiche. **Modération par mail** (photo + détails + liens d'action signés). Un
+publication → widget sur la **fiche feu et la page commune**. **Modération par mail** (photo + détails +
+liens d'action signés). Un
 **auto-filtre auto-hébergé** (NSFW + pertinence « feu ») pré-trie avant l'humain. Donnée **`declaree`**,
 **horodatée**, de **lignée distincte** du satellite, dans une **base propre**.
 **Hors périmètre (spec future) :** tout module temps réel / d'urgence — **chat**, **solidarité**. Voir §13.
@@ -78,8 +79,9 @@ site / une autre origine : un **petit service dynamique sous la même origine**.
         │
         ├── /api/contrib/*  ............. MINI-API dynamique (même VPS, même origine)
         │      ├─ feux-proches / deposer / signaler
+        │      ├─ feu/{public_id}/photos · commune/{code_insee}/photos  (widget, §7)
+        │      ├─ img/{public_id}  (2 tailles ; AUTHZ pour les non-publiées ; 410 au retrait)
         │      ├─ action/{token}  (liens de modération par mail — GET confirme, POST agit)
-        │      ├─ service d'images (route AUTHZ pour les non-publiées)
         │      └─ jobs : auto-filtre ONNX (§5) + purge quotidienne (§9)
         │
         └── /admin/contrib  ............. page de modération (route AUTHENTIFIÉE)
@@ -130,9 +132,12 @@ Table principale `contribution` (`declaree`, à cycle de vie) ; table annexe `ip
 | `hotspot_raw_id` | INTEGER NULL | **ancre géométrique** : hotspot le plus proche retenu (§4) |
 | `distance_km` | REAL | distance géoloc-live→hotspot au déclic (audit ; scalaire, **ne localise pas l'auteur**) |
 | `captured_at` | TEXT UTC | **instant de la prise de vue**, horodaté **serveur** — pilier fraîcheur (§0) |
-| `image_path` | TEXT NULL | chemin du JPEG **hors répertoire public**, encodé par nous (NULL après purge) |
-| `image_sha256` | TEXT | empreinte de l'image encodée — **dédup + traçabilité, survit à la purge** |
-| `largeur`, `hauteur` | INTEGER | dimensions de l'image encodée |
+| `image_path` | TEXT NULL | JPEG d'affichage (`max_px`) **hors répertoire public** (NULL après purge) |
+| `thumb_path` | TEXT NULL | JPEG **vignette** (`thumb_px`) pour la grille (NULL après purge) |
+| `image_sha256` | TEXT | empreinte de l'image d'affichage — **dédup + traçabilité, survit à la purge** |
+| `largeur`, `hauteur` | INTEGER | dimensions de l'image d'affichage |
+| `thumb_largeur`, `thumb_hauteur` | INTEGER | dimensions de la vignette (layout anti-CLS, §7) |
+| `code_insee` | TEXT NULL | **commune contenant le hotspot** (point-dans-polygone) — lien optionnel (§7.4) |
 | `email` | TEXT NULL | **optionnel, non vérifié** — pour prévenir de la publication ; purgé à terme (§9) |
 | `ip_hash` | TEXT | HMAC salé de l'IP — anti-abus/blacklist sans conserver l'IP (§8) |
 | `consentement_at` | TEXT UTC | **preuve de consentement** (RGPD/LCEN) |
@@ -203,9 +208,11 @@ Bouton **« Déposer une photo »** → **modal**. Étapes :
    enregistre `cgu_version`).
 6. **`POST /api/contrib/deposer`** — corps = **image (blob canvas) + feu choisi + géoloc + email? + consent**.
    Contrôles : **blocklist IP** + **quota IP** (§8). Puis :
-   - encodage : resize `max_px` + ré-encodage JPEG (`jpeg_qualite`), `sha256`, écriture **hors répertoire
-     public** ;
-   - insertion `contribution` en `soumise` (+ `captured_at`, `consentement_at`, `email?`) ;
+   - encodage **deux tailles** : image d'affichage (`max_px`) + **vignette** (`thumb_px`), ré-encodage JPEG
+     (`jpeg_qualite`), `sha256` de l'image d'affichage, écriture **hors répertoire public** ;
+   - **commune du hotspot** : point-dans-polygone de l'ancre sur les géométries commune (socle, lecture
+     seule) → `code_insee` (nullable, §7.4) ;
+   - insertion `contribution` en `soumise` (+ `captured_at`, `consentement_at`, `code_insee?`, `email?`) ;
    - mise en file de l'auto-filtre (§5).
 
 Plus de flux « code » : le dépôt est **en une étape**, sans aller-retour mail → **zéro friction terrain**, et
@@ -271,14 +278,72 @@ au contributeur si `email` fourni ; **signalement public** (`POST /api/contrib/s
 
 ---
 
-## 7. Exposition sur la fiche — widget
+## 7. Exposition — widget (fiche feu **et** page commune)
 
-- **Onglet « Photos »** (sentifeu.fr), peuplé **côté client** via `GET /api/contrib/feu/{public_id}/photos`.
-  N'apparaît que s'il existe ≥1 `publiee`.
-- Chaque photo : image (route API via `public_id`), **`captured_at` en évidence** (« prise le {date/heure} »),
-  badge **« Photo de visiteur — non vérifiée par Vigifeu »**. **Aucun nom, aucune géoloc auteur**.
-- Contenu tiers non fiable : média statique, **jamais de HTML utilisateur**.
-- **Photo publiée = conservée durablement**, feu archivé compris (Spec 02) : archive datée.
+Deux points d'affichage, **même widget**, deux requêtes ; peuplé **côté client** (générateur statique non
+modifié, pas de regen) :
+- **fiche feu** → `GET /api/contrib/feu/{public_id}/photos` (photos de ce feu) ;
+- **page commune** → `GET /api/contrib/commune/{code_insee}/photos` (photos de **tous les feux** de la
+  commune — lien commune §7.4).
+L'onglet **« Photos »** n'apparaît que s'il existe ≥1 `publiee` pour la cible.
+
+### 7.1 Contrat de l'endpoint
+
+Réponse JSON, **`publiee` uniquement**, **tri `captured_at` décroissant** (plus récent en tête),
+**pagination** par `photos_page_taille` (§10) via `?page=` (ou curseur `?before=<captured_at>`) :
+
+```json
+{ "total": 12, "page": 1, "photos": [
+  { "public_id": "aZ3…", "url": "/api/contrib/img/aZ3…",
+    "thumb_url": "/api/contrib/img/aZ3…?t=thumb",
+    "captured_at": "2026-08-07T14:32:00Z",
+    "largeur": 1600, "hauteur": 1200, "thumb_largeur": 480, "thumb_hauteur": 360,
+    "feu": { "public_id": "…", "libelle": "Feu de {lieu}" } } ] }
+```
+
+*(Le bloc `feu` sert surtout à la vue commune, pour lier chaque photo à son feu.)*
+
+### 7.2 Service des images, tailles & cache
+
+- **Deux tailles** encodées au dépôt (§4) : **vignette** (`thumb_px`) pour la grille, **image d'affichage**
+  (`max_px`) pour le plein écran. *(Pas d'original pleine résolution exposé.)* `<img>` avec `loading="lazy"`,
+  `width`/`height` fournis (anti-CLS).
+- **Cache** : le **JSON** en `Cache-Control: max-age` **court** (`photos_json_ttl_s`, ex. 60 s) pour que
+  **publications et retraits se propagent vite** ; les **images** en TTL plus long (`image_ttl_s`), servies
+  `immutable` (l'URL est liée au `public_id`, le contenu ne change pas).
+- **Invalidation au retrait (obligation hébergeur).** Si une photo passe `publiee → rejetee` (signalement
+  retenu, §6) : elle **sort du JSON** immédiatement (donc de la galerie dès l'expiration du TTL court), et sa
+  route image renvoie **`410 Gone`**. TTL image borné ; purge CDN Cloudflare **optionnelle** pour un retrait
+  instantané.
+
+### 7.3 UX & accessibilité
+
+- **Grille de vignettes** → clic = **lightbox** plein écran (image `max_px`), avec **`captured_at` en
+  évidence** (« prise le {date/heure} ») et badge **« Photo de visiteur — non vérifiée par Vigifeu »**.
+- **Navigation clavier** de la lightbox (←/→/Échap), focus piégé ; **`alt`** descriptif non-personnel
+  (« Photo du feu de {lieu} prise le {date} »).
+- **États** : squelette de **chargement** ; **erreur / API down** → onglet vide, **dégradation gracieuse**
+  (le site statique reste intact) ; **vide** → onglet masqué.
+- **Aucun nom, aucune géoloc auteur** ; contenu tiers non fiable = **média statique**, jamais de HTML
+  utilisateur.
+- **`public_id` aléatoire opaque** (non énumérable) → pas de scraping par incrément.
+
+### 7.4 Lien commune (optionnel, basé sur le hotspot)
+
+- Au dépôt, on calcule la **commune contenant le point du hotspot d'ancrage** (point-dans-polygone sur les
+  géométries commune de la socle, Lot 3) → `code_insee` **stocké, nullable**. **Basé sur le hotspot, jamais
+  sur la géoloc de l'auteur** (§0).
+- Hotspot hors de tout polygone (offshore, géométrie généralisée) → `code_insee` **NULL** → simplement pas
+  d'entrée sur une page commune. Non bloquant.
+- Choix : commune **contenant le hotspot** (une, non ambiguë), **pas** les relations `fe_commune_rel` du feu
+  (qui en listent plusieurs, dont des « à proximité »).
+- L'onglet « Photos » de la page commune agrège les `publiee` de **tous les feux** dont un hotspot contributif
+  est dans la commune, même tri/pagination/cache.
+
+### 7.5 Conservation
+
+**Photo publiée = conservée durablement**, feu archivé compris (Spec 02) : archive datée, visible sur la
+fiche feu **et** la page commune tant qu'elles existent.
 
 ---
 
@@ -320,8 +385,13 @@ bornée (purge §9). Intérêt légitime + conservation **mentionnés** dans la 
 [contributions]
 activated = false
 rayon_max_km = 10.0                  # pas de hotspot en deçà → refus (§4)
-max_px = 1600                        # resize de l'image capturée
+max_px = 1600                        # image d'affichage (lightbox)
+thumb_px = 480                       # vignette (grille)
 jpeg_qualite = 82
+# Affichage (widget)
+photos_page_taille = 24              # pagination de la galerie
+photos_json_ttl_s = 60               # Cache-Control du JSON (retraits propagés vite)
+image_ttl_s = 3600                   # Cache-Control des images (immutable, clé = public_id)
 # Anti-abus (axe IP)
 max_photos_ip_jour = 6
 auto_block_n_rejets = 5
@@ -378,20 +448,25 @@ Revue juridique recommandée avant ouverture large.
 1. **Squelette API** — service **Flask** (systemd, derrière le reverse proxy) monté sous `/api/contrib`, base
    contributions + migration (`contribution` + index unique `image_sha256`, `ip_blocklist`), **connexion
    read-only** à la socle (WAL). `pytest` vert (8 socle intacts).
-2. **Encodage image** — blob → resize + ré-encodage JPEG, `sha256`, écriture hors répertoire public. Test :
-   JPEG borné, **sans EXIF**.
-3. **Feux proches** — helper « hotspots < `rayon_max_km` → `fire_event` » + endpoint. Test : 5 km → feu ;
-   20 km → aucun (refus).
-4. **Dépôt** — `POST /deposer` (image + feu + géoloc + email? + consent → `soumise`), quota IP + blocklist.
-   Tests : dépôt OK = ligne + `captured_at` ; quota/blocklist = refus ; **image écrite au dépôt uniquement**.
+2. **Encodage image** — blob → **deux tailles** (affichage `max_px` + vignette `thumb_px`), ré-encodage JPEG,
+   `sha256`, écriture hors répertoire public. Test : deux JPEG bornés, dimensions, **sans EXIF**.
+3. **Feux proches + commune** — helper « hotspots < `rayon_max_km` → `fire_event` » + helper
+   « point-dans-polygone → `code_insee` » (lecture socle) + endpoint feux-proches. Tests : 5 km → feu ;
+   20 km → aucun (refus) ; point dans commune X → `code_insee` X ; point offshore → NULL.
+4. **Dépôt** — `POST /deposer` (image + feu + géoloc + email? + consent → `soumise`), encodage 2 tailles +
+   `code_insee`, quota IP + blocklist. Tests : dépôt OK = ligne + `captured_at` + vignette + `code_insee?` ;
+   quota/blocklist = refus ; **images écrites au dépôt uniquement**.
 5. **Auto-filtre** — NudeNet + CLIP zero-shot ONNX, worker à la demande, 1 cœur, coordination CPU. **Fixtures
    d'images** → verdict (`nsfw`/`hors_sujet`/`ok`), **sans réseau ni GPU**.
 6. **Modération** — page `/admin/contrib` (auth) **+ mail d'action** (tokens signés, page de confirmation,
    POST) : publier/rejeter/blacklister ; notification publication au contributeur ; `signaler`. Tests des
    transitions + **sécurité des liens (GET sans effet)** + **accès images non publiées**.
 7. **Purge** — job quotidien ; idempotence + suppression disque effective + squelette conservé.
-8. **Widget** — endpoint `feu/{public_id}/photos` + snippet client (affiche `captured_at`) ; dégradation si
-   API down. Fiche statique **non régénérée**.
+8. **Widget** — endpoints `feu/{public_id}/photos` **et** `commune/{code_insee}/photos` (JSON paginé, tri
+   `captured_at` desc, `Cache-Control` court) + service d'images 2 tailles (TTL long, **410 au retrait**) +
+   snippet client : grille de vignettes → lightbox (clavier, `alt`), `captured_at`, badge, squelette de
+   chargement, dégradation si API down. Onglet « Photos » sur **fiche feu et page commune**. Statique **non
+   régénéré**. Tests : tri/pagination, **retrait → délisté + 410**, `public_id` non énumérable.
 9. **Modal + caméra** — CTA contextuel (fiche/carte) + entrée menu hamburger ; parcours (géoloc → feu
    présélectionné/proche → **capture `getUserMedia`** → email optionnel/consentement → dépôt) ; **détection
    navigateur in-app** → message de repli.
@@ -432,6 +507,12 @@ verts.
 - **Accès socle = WAL direct, read-only strict** (feux actifs, distance pyproj) ; read-model = repli — 2026-08-07.
 - **Mail = `smtplib` stdlib → relais SMTP**, derrière `send_mail()` ; **infra nouvelle** (le projet n'envoyait
   pas d'email, seulement des pings healthchecks.io) — 2026-08-07.
+- **Affichage détaillé (v0.7)** : contrat JSON de l'endpoint (tri `captured_at` desc, pagination), **deux
+  tailles** (vignette `thumb_px` + affichage `max_px`), cache (JSON TTL court + images TTL long + **410 au
+  retrait**), UX galerie (grille → lightbox clavier + `alt`), `public_id` aléatoire non énumérable — 2026-08-07.
+- **Lien commune (optionnel) + onglet Photos page commune (v0.7)** : `code_insee` = commune **contenant le
+  hotspot** (point-dans-polygone, nullable), **pas la géoloc auteur**, **pas** `fe_commune_rel` ; onglet
+  commune = même widget, requête `commune/{code_insee}/photos` — 2026-08-07.
 
 **`OUVERT` :**
 - **Hotspot pas encore cluster** au dépôt : accepter + rattacher (défaut) vs refuser.
