@@ -490,6 +490,9 @@ rayon_max_km = 10.0                      # pas de hotspot en deçà → refus (�
 max_px = 1600                            # image d'affichage (lightbox)
 thumb_px = 480                           # vignette (grille)
 jpeg_qualite = 82
+store_dir = "data/contrib_images"        # images encodées HORS racine publique (§7.2) — servies via l'API seule
+max_upload_mo = 12                       # plafond de l'upload, appliqué AVANT lecture mémoire (§4)
+cgu_version_courante = "2026-08"         # version CGU/mentions en vigueur, enregistrée à chaque dépôt (opposabilité)
 photos_page_taille = 24                  # pagination de la galerie (widget, §7)
 photos_json_ttl_s = 60                   # Cache-Control du JSON (retraits propagés vite)
 image_ttl_s = 3600                       # Cache-Control des images (immutable, clé = public_id)

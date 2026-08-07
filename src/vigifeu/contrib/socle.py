@@ -74,6 +74,38 @@ def feux_proches(
     return sorted(best.values(), key=lambda e: e["distance_km"])
 
 
+def valider_ancre(
+    conn: sqlite3.Connection,
+    lat: float,
+    lon: float,
+    fire_event_id: int,
+    hotspot_raw_id: int,
+    rayon_max_km: float,
+) -> dict | None:
+    """Vérifie l'ancre choisie au dépôt (§4.3) et renvoie sa distance + coords hotspot.
+
+    Le hotspot doit appartenir au `fire_event` désigné, ce feu être **publié** et non fusionné,
+    et la géoloc live tomber à moins de `rayon_max_km` du hotspot. Retourne
+    `{distance_km, hs_lat, hs_lon}` si tout est vrai, sinon `None` (dépôt refusé). La position
+    de l'auteur n'est **pas** conservée : seule la distance scalaire l'est (§0/§11).
+    """
+    row = conn.execute(
+        "SELECT h.lat, h.lon FROM hotspot_raw h "
+        "JOIN fe_hotspot fh ON fh.hotspot_id = h.id "
+        "JOIN fire_event_version fev ON fev.id = fh.fire_event_version_id "
+        "JOIN fire_event fe ON fe.id = fev.fire_event_id "
+        "WHERE h.id = ? AND fe.id = ? "
+        "AND fe.public_id IS NOT NULL AND fe.lifecycle != 'fusionne' LIMIT 1",
+        (hotspot_raw_id, fire_event_id),
+    ).fetchone()
+    if row is None:
+        return None
+    d_km = geo.distance_m(lat, lon, row["lat"], row["lon"]) / 1000.0
+    if d_km > rayon_max_km:
+        return None
+    return {"distance_km": round(d_km, 3), "hs_lat": row["lat"], "hs_lon": row["lon"]}
+
+
 def commune_du_point(conn: sqlite3.Connection, lat: float, lon: float) -> str | None:
     """`code_insee` de la commune contenant (lat, lon), sinon None (offshore/hors couverture).
 
