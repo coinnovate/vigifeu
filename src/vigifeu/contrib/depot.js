@@ -21,6 +21,12 @@
   "use strict";
 
   var API = "/api/contrib";
+  // Icône appareil photo (SVG, style Feather) — `currentColor` : hérite du blanc des boutons.
+  var ICONE_CAMERA =
+    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>' +
+    '<circle cx="12" cy="13" r="4"/></svg>';
   // Licence d'AFFICHAGE non-exclusive (l'auteur garde ses droits) + garantie d'auteur +
   // absence de personne identifiable (aide au droit à l'image en amont de la modération, §11).
   var CONSENT_TXT =
@@ -49,9 +55,13 @@
       ".sentifeu-erreur{color:#b00020}.sentifeu-feux label{display:block;margin:.2rem 0}" +
       ".sentifeu-secu{margin-top:1rem;padding-top:.75rem;border-top:1px solid #eee;" +
       "color:#b00020;font-size:.8rem}" +
-      ".sentifeu-flottant{position:fixed;right:16px;bottom:16px;z-index:9990;height:48px;" +
-      "padding:0 1rem;border:0;border-radius:24px;background:#c1440e;color:#fff;font:600 15px system-ui;" +
-      "box-shadow:0 2px 10px rgba(0,0,0,.35);cursor:pointer}";
+      // CTA sous la carte (stylé ici pour ne pas dépendre du CSS du site) + bouton flottant.
+      ".cta-depot,.sentifeu-flottant{display:inline-flex;align-items:center;gap:.5rem;" +
+      "border:0;background:#c1440e;color:#fff;font:600 15px system-ui;cursor:pointer}" +
+      ".cta-depot{padding:.7rem 1.1rem;border-radius:10px}" +
+      ".cta-depot:hover,.sentifeu-flottant:hover{background:#a63a0c}" +
+      ".sentifeu-flottant{position:fixed;right:16px;bottom:16px;z-index:9990;padding:.7rem 1.1rem;" +
+      "border-radius:24px;box-shadow:0 3px 12px rgba(0,0,0,.35)}";
     document.head.appendChild(s);
   }
 
@@ -301,15 +311,19 @@
 
   function init() {
     var boutons = document.querySelectorAll("[data-sentifeu-depot]");
+    if (!boutons.length) return;
+    injecterStyles();  // stylise les CTA .cta-depot dès le chargement (icône + pilule)
     Array.prototype.forEach.call(boutons, function (b) {
       b.addEventListener("click", function () { ouvrir(contexteBouton(b)); });
     });
     // Bouton FLOTTANT sur mobile (mobile-terrain) : toujours visible en scrollant, reprend le
     // contexte du 1er CTA de la page (le feu). Sur desktop, aucun (le dépôt se fait au tél).
-    if (boutons.length && estMobile()) {
-      injecterStyles();
-      var flot = el("button", { type: "button", class: "sentifeu-flottant",
-        "aria-label": "Déposer une photo" }, "📷 Déposer");
+    if (estMobile()) {
+      var flot = document.createElement("button");
+      flot.type = "button";
+      flot.className = "sentifeu-flottant";
+      flot.setAttribute("aria-label", "Déposer une photo");
+      flot.innerHTML = ICONE_CAMERA + "<span>Déposer</span>";
       flot.addEventListener("click", function () { ouvrir(contexteBouton(boutons[0])); });
       document.body.appendChild(flot);
     }
