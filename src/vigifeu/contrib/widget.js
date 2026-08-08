@@ -18,6 +18,24 @@
 
   var BADGE = "Photo de visiteur — non vérifiée par Sentifeu";
 
+  // Styles auto-portants (le gabarit statique n'est pas modifié) : grille + lightbox.
+  function injecterStyles() {
+    if (document.getElementById("sentifeu-photos-styles")) return;
+    var s = document.createElement("style");
+    s.id = "sentifeu-photos-styles";
+    s.textContent =
+      ".sentifeu-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));" +
+      "gap:.5rem;margin:.5rem 0}" +
+      ".sentifeu-vignette{padding:0;border:0;background:none;cursor:zoom-in;line-height:0}" +
+      ".sentifeu-vignette img{width:100%;height:100%;object-fit:cover;border-radius:6px}" +
+      ".sentifeu-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9998;display:flex;" +
+      "flex-direction:column;align-items:center;justify-content:center;padding:1rem}" +
+      ".sentifeu-lightbox img{max-width:96vw;max-height:80vh;border-radius:6px}" +
+      ".sentifeu-lightbox-legende{color:#fff;margin:.6rem 0 0;font:14px system-ui}" +
+      ".sentifeu-badge{color:#ddd;font:12px system-ui;margin-top:.2rem}";
+    document.head.appendChild(s);
+  }
+
   function fmtDate(iso) {
     try {
       return new Date(iso).toLocaleString("fr-FR", {
@@ -100,25 +118,18 @@
   function monter(conteneur) {
     var endpoint = conteneur.getAttribute("data-sentifeu-photos");
     if (!endpoint) return;
+    injecterStyles();
     var lieu = conteneur.getAttribute("data-lieu") || "";
-    conteneur.classList.add("sentifeu-chargement"); // squelette CSS côté site
-
+    // Le conteneur part `hidden` côté gabarit : on ne le révèle QUE s'il y a des photos
+    // (onglet masqué si vide, §7.3). Erreur/API down → reste masqué (dégradation gracieuse).
     fetch(endpoint, { headers: { Accept: "application/json" } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
-        conteneur.classList.remove("sentifeu-chargement");
-        if (!data || !data.photos || data.photos.length === 0) {
-          conteneur.setAttribute("hidden", ""); // vide → onglet masqué
-          return;
-        }
+        if (!data || !data.photos || data.photos.length === 0) return;
         conteneur.removeAttribute("hidden");
         rendreGrille(conteneur, data.photos, lieu);
       })
-      .catch(function () {
-        // API down / erreur réseau → dégradation gracieuse (rien affiché).
-        conteneur.classList.remove("sentifeu-chargement");
-        conteneur.setAttribute("hidden", "");
-      });
+      .catch(function () {});
   }
 
   function init() {

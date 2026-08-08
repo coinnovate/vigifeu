@@ -233,6 +233,17 @@
 {% endif %}
 </section>
 
+{% if contrib_active %}
+{# 3.8bis Photos de visiteurs (Spec 10 §7) — peuplé côté client par widget.js (onglet masqué
+   si aucune photo publiée). CTA de dépôt contextuel : ce feu est présélectionné. #}
+<section class="contributions">
+<h2>Photos</h2>
+<p><button type="button" class="cta-depot" data-sentifeu-depot
+   data-fire-public-id="{{ public_id }}" data-lieu="{{ lieu }}">Déposer une photo</button></p>
+<div class="photos-widget" data-sentifeu-photos="/api/contrib/feu/{{ public_id }}/photos"
+     data-lieu="{{ lieu }}" hidden></div>
+</section>
+{% endif %}
 {# 3.9 Données brutes — second niveau, replié #}
 <section class="brut">
 <h2>Données brutes</h2>
@@ -249,4 +260,8 @@
 <script src="/static/js/maplibre-gl.js" defer></script>
 <script src="/static/carte-config.js" defer></script>
 <script src="/static/js/carte.js" defer></script>
+{% if contrib_active %}
+<script src="/api/contrib/widget.js" defer></script>
+<script src="/api/contrib/depot.js" defer></script>
+{% endif %}
 {% endblock %}

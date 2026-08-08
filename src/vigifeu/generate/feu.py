@@ -561,6 +561,10 @@ def load_fire_context(conn: sqlite3.Connection, config: dict, event_id: int) -> 
         "nom": nom,
         "lieu": lieu,
         "annee": annee,
+        "public_id": fire["public_id"],
+        # Canal contributif (Spec 10) : CTA « Déposer » + onglet « Photos », affichés SEULEMENT
+        # quand [contributions].activated (invisible tant que le canal n'est pas ouvert).
+        "contrib_active": config.get("contributions", {}).get("activated", False),
         "lifecycle": fire["lifecycle"],
         "badge_cycle": {"label": fr.badge_cycle_de_vie(fire["lifecycle"]), "classe": fire["lifecycle"]},
         "badge_confiance": fr.badge_confiance(fire["confidence_level"]) if fire["confidence_level"] else None,

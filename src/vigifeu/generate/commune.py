@@ -201,6 +201,9 @@ def load_commune_context(conn: sqlite3.Connection, config: dict, code_insee: str
         "nom": commune["nom"],
         "nom_dept": nom_dept,
         "dept": dept,
+        "code_insee": code_insee,
+        # Onglet « Photos » agrégeant les feux de la commune (Spec 10 §7.4), gated sur activated.
+        "contrib_active": config.get("contributions", {}).get("activated", False),
         "epci": commune["epci_code"],
         "population": commune["population"],
         "millesime": commune["referentiel_millesime"],

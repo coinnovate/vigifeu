@@ -99,5 +99,18 @@
 </section>
 {% endif %}
 
+{% if contrib_active %}
+{# Photos de visiteurs de la commune (Spec 10 §7.4) — agrège les feux dont un hotspot
+   contributif est dans la commune ; peuplé côté client, onglet masqué si aucune photo. #}
+<section class="contributions">
+<h2>Photos</h2>
+<div class="photos-widget" data-sentifeu-photos="/api/contrib/commune/{{ code_insee }}/photos"
+     data-lieu="{{ nom }}" hidden></div>
+</section>
+{% endif %}
+
 </article>
+{% endblock %}
+{% block scripts %}
+{% if contrib_active %}<script src="/api/contrib/widget.js" defer></script>{% endif %}
 {% endblock %}

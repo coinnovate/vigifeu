@@ -93,6 +93,23 @@ def html(saumos_archive):
     return load_fire_context(conn, config, saumos_id), render_feu(env, ctx)
 
 
+def test_contributions_gate(saumos_archive):
+    """Bloc contributif (Spec 10) : absent si activated=false (cf. golden), présent si true."""
+    conn, config, saumos_id = saumos_archive
+    ctx = load_fire_context(conn, config, saumos_id)
+    env = make_env(config["generate"]["templates_dir"])
+
+    assert ctx["contrib_active"] is False          # config par défaut
+    assert "data-sentifeu-depot" not in render_feu(env, ctx)
+
+    ctx["contrib_active"] = True
+    page = render_feu(env, ctx)
+    assert "data-sentifeu-depot" in page
+    assert f'data-fire-public-id="{ctx["public_id"]}"' in page
+    assert f"/api/contrib/feu/{ctx['public_id']}/photos" in page
+    assert "/api/contrib/widget.js" in page and "/api/contrib/depot.js" in page
+
+
 def test_contexte_entete(saumos_archive):
     conn, config, saumos_id = saumos_archive
     ctx = load_fire_context(conn, config, saumos_id)
@@ -213,6 +230,21 @@ def commune_html(saumos_archive):
     env = make_env(config["generate"]["templates_dir"])
     ctx = load_commune_context(conn, config, SAUMOS)
     return ctx, render_commune(env, ctx)
+
+
+def test_commune_contributions_gate(saumos_archive):
+    """Onglet Photos commune (Spec 10 §7.4) : absent si activated=false, présent si true."""
+    conn, config, _ = saumos_archive
+    ctx = load_commune_context(conn, config, SAUMOS)
+    env = make_env(config["generate"]["templates_dir"])
+
+    assert ctx["contrib_active"] is False
+    assert "photos-widget" not in render_commune(env, ctx)
+
+    ctx["contrib_active"] = True
+    page = render_commune(env, ctx)
+    assert f"/api/contrib/commune/{SAUMOS}/photos" in page
+    assert "/api/contrib/widget.js" in page
 
 
 def test_commune_entete_et_situation(commune_html):
