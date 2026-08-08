@@ -156,3 +156,20 @@ def test_mailer_depuis_env_present_construit(monkeypatch):
     mailer = mailer_depuis_env(config)
     assert isinstance(mailer, MailerSMTP)
     assert mailer._host == "smtp.example.org" and mailer._port == 2525
+
+
+def test_mailer_depuis_env_tolere_commentaire_inline(monkeypatch):
+    """Commentaire inline (piège .env systemd) : récupéré, host/port nettoyés."""
+    monkeypatch.setenv("CONTRIB_SMTP_HOST", "goeland.o2switch.net   # ou mail.sentifeu.fr")
+    monkeypatch.setenv("CONTRIB_SMTP_PORT", "587   # STARTTLS")
+    config = {"contributions": {"mail_expediteur": "x"}}
+    mailer = mailer_depuis_env(config)
+    assert isinstance(mailer, MailerSMTP)
+    assert mailer._host == "goeland.o2switch.net" and mailer._port == 587
+
+
+def test_mailer_depuis_env_port_invalide_desactive_sans_crash(monkeypatch):
+    """Un port réellement illisible désactive l'e-mail (None), sans faire planter le service."""
+    monkeypatch.setenv("CONTRIB_SMTP_HOST", "smtp.example.org")
+    monkeypatch.setenv("CONTRIB_SMTP_PORT", "pas-un-port")
+    assert mailer_depuis_env({"contributions": {"mail_expediteur": "x"}}) is None

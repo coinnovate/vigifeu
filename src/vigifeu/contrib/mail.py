@@ -17,6 +17,7 @@ configuré → le canal reste utilisable (modération via page admin), sans plan
 
 from __future__ import annotations
 
+import logging
 import os
 import smtplib
 import ssl
@@ -153,13 +154,25 @@ class MailerSMTP:
 
 
 def mailer_depuis_env(config: dict) -> Mailer | None:
-    """Construit un `MailerSMTP` depuis `CONTRIB_SMTP_*`, ou `None` si le host n'est pas configuré."""
+    """Construit un `MailerSMTP` depuis `CONTRIB_SMTP_*`, ou `None` si non/mal configuré.
+
+    Tolérant : un `CONTRIB_SMTP_PORT` illisible (ex. commentaire inline laissé dans le .env,
+    que systemd n'ôte pas) **désactive l'e-mail** au lieu de faire planter tout le service —
+    le dépôt/widget/admin doivent rester debout même si le SMTP est mal réglé.
+    """
     host = os.environ.get("CONTRIB_SMTP_HOST")
     if not host:
         return None
+    brut = os.environ.get("CONTRIB_SMTP_PORT", "587").split("#", 1)[0].strip()
+    try:
+        port = int(brut)
+    except ValueError:
+        logging.getLogger("vigifeu.contrib").warning(
+            "CONTRIB_SMTP_PORT invalide (%r) — envoi d'e-mail désactivé", brut)
+        return None
     return MailerSMTP(
-        host=host,
-        port=int(os.environ.get("CONTRIB_SMTP_PORT", "587")),
+        host=host.split("#", 1)[0].strip(),
+        port=port,
         user=os.environ.get("CONTRIB_SMTP_USER"),
         password=os.environ.get("CONTRIB_SMTP_PASSWORD"),
         expediteur=config["contributions"]["mail_expediteur"],
