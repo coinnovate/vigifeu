@@ -48,7 +48,10 @@
       ".sentifeu-fermer{float:right;border:none;background:none;font-size:1.4rem;line-height:1}" +
       ".sentifeu-erreur{color:#b00020}.sentifeu-feux label{display:block;margin:.2rem 0}" +
       ".sentifeu-secu{margin-top:1rem;padding-top:.75rem;border-top:1px solid #eee;" +
-      "color:#b00020;font-size:.8rem}";
+      "color:#b00020;font-size:.8rem}" +
+      ".sentifeu-flottant{position:fixed;right:16px;bottom:16px;z-index:9990;height:48px;" +
+      "padding:0 1rem;border:0;border-radius:24px;background:#c1440e;color:#fff;font:600 15px system-ui;" +
+      "box-shadow:0 2px 10px rgba(0,0,0,.35);cursor:pointer}";
     document.head.appendChild(s);
   }
 
@@ -289,16 +292,27 @@
     );
   }
 
+  function contexteBouton(b) {
+    return {
+      firePublicId: b.getAttribute("data-fire-public-id") || null,
+      lieu: b.getAttribute("data-lieu") || "",
+    };
+  }
+
   function init() {
     var boutons = document.querySelectorAll("[data-sentifeu-depot]");
     Array.prototype.forEach.call(boutons, function (b) {
-      b.addEventListener("click", function () {
-        ouvrir({
-          firePublicId: b.getAttribute("data-fire-public-id") || null,
-          lieu: b.getAttribute("data-lieu") || "",
-        });
-      });
+      b.addEventListener("click", function () { ouvrir(contexteBouton(b)); });
     });
+    // Bouton FLOTTANT sur mobile (mobile-terrain) : toujours visible en scrollant, reprend le
+    // contexte du 1er CTA de la page (le feu). Sur desktop, aucun (le dépôt se fait au tél).
+    if (boutons.length && estMobile()) {
+      injecterStyles();
+      var flot = el("button", { type: "button", class: "sentifeu-flottant",
+        "aria-label": "Déposer une photo" }, "📷 Déposer");
+      flot.addEventListener("click", function () { ouvrir(contexteBouton(boutons[0])); });
+      document.body.appendChild(flot);
+    }
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

@@ -127,6 +127,10 @@
       .then(function (data) {
         if (!data || !data.photos || data.photos.length === 0) return;
         conteneur.removeAttribute("hidden");
+        // Révèle aussi la section parente masquée (titre « Photos » + grille) — seulement
+        // maintenant qu'on sait qu'il y a des photos (onglet masqué si vide, §7.3).
+        var section = conteneur.closest("[hidden]");
+        if (section) section.removeAttribute("hidden");
         rendreGrille(conteneur, data.photos, lieu);
       })
       .catch(function () {});

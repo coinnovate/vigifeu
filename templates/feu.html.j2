@@ -76,6 +76,11 @@
 {% if imagerie_from %}<p class="note imagerie-note" hidden id="imagerie-note"></p>{% endif %}
 <noscript><p class="indispo">La carte interactive nécessite JavaScript. La synthèse et la chronologie ci-dessus décrivent le feu sans carte.</p></noscript>
 </section>
+{% if contrib_active %}
+{# CTA de dépôt (Spec 10 §7) — placé HAUT, juste sous la carte : ce feu est présélectionné.
+   Un bouton flottant s'ajoute sur mobile (depot.js). Gated : invisible tant que le canal est off. #}
+<p class="depot-cta"><button type="button" class="cta-depot" data-sentifeu-depot data-fire-public-id="{{ public_id }}" data-lieu="{{ lieu }}">📷 Déposer une photo de ce feu</button></p>
+{% endif %}
 
 {# 3.4 Communes concernées — paliers proches ouverts, paliers lointains repliés #}
 {% if communes_groupes or communes_groupes_eloignes %}
@@ -234,14 +239,12 @@
 </section>
 
 {% if contrib_active %}
-{# 3.8bis Photos de visiteurs (Spec 10 §7) — peuplé côté client par widget.js (onglet masqué
-   si aucune photo publiée). CTA de dépôt contextuel : ce feu est présélectionné. #}
-<section class="contributions">
+{# Galerie des photos de visiteurs (Spec 10 §7) — section RÉVÉLÉE par widget.js seulement s'il
+   existe des photos publiées (sinon masquée, pas de titre « Photos » vide). Le dépôt se fait
+   via le CTA sous la carte + le bouton flottant mobile. #}
+<section class="contributions" hidden>
 <h2>Photos</h2>
-<p><button type="button" class="cta-depot" data-sentifeu-depot
-   data-fire-public-id="{{ public_id }}" data-lieu="{{ lieu }}">Déposer une photo</button></p>
-<div class="photos-widget" data-sentifeu-photos="/api/contrib/feu/{{ public_id }}/photos"
-     data-lieu="{{ lieu }}" hidden></div>
+<div class="photos-widget" data-sentifeu-photos="/api/contrib/feu/{{ public_id }}/photos" data-lieu="{{ lieu }}"></div>
 </section>
 {% endif %}
 {# 3.9 Données brutes — second niveau, replié #}

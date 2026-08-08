@@ -178,6 +178,7 @@ def test_depot_js_servi(make):
     assert b"SentifeuDepot" in r.data
     assert b"getUserMedia" in r.data  # capture in-app stricte
     assert b"estMobile" in r.data     # détection PC → invitation mobile (§0)
+    assert b"sentifeu-flottant" in r.data  # bouton flottant mobile (discoverabilité)
     assert b"112" in r.data           # bandeau sécurité (pas un service de secours)
     assert "licence non exclusive".encode() in r.data  # consentement = licence d'affichage
 
