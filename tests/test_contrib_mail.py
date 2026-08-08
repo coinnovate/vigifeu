@@ -106,6 +106,43 @@ def test_mailer_smtp_construit_un_message_multipart_avec_image():
     assert "image/jpeg" in types
 
 
+def test_mailer_smtp_port_465_utilise_ssl(monkeypatch):
+    """Port 465 → SMTP_SSL (SSL implicite), pas STARTTLS (cas o2switch/OVH)."""
+    utilises = {"ssl": False, "plain": False}
+
+    class FauxSMTP:
+        def __init__(self, *a, **k):
+            utilises["plain"] = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def starttls(self, **k):
+            pass
+
+        def login(self, *a):
+            pass
+
+        def send_message(self, msg):
+            pass
+
+    class FauxSMTPSSL(FauxSMTP):
+        def __init__(self, *a, **k):
+            utilises["ssl"] = True
+
+    import vigifeu.contrib.mail as mailmod
+
+    monkeypatch.setattr(mailmod.smtplib, "SMTP", FauxSMTP)
+    monkeypatch.setattr(mailmod.smtplib, "SMTP_SSL", FauxSMTPSSL)
+    MailerSMTP(host="h", port=465, user="u", password="p", expediteur="x").envoyer(
+        Mail("a@b.fr", "s", "<p>h</p>", "h")
+    )
+    assert utilises["ssl"] and not utilises["plain"]
+
+
 def test_mailer_depuis_env_absent_retourne_none(monkeypatch):
     monkeypatch.delenv("CONTRIB_SMTP_HOST", raising=False)
     config = {"contributions": {"mail_expediteur": "x"}}

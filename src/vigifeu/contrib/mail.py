@@ -116,7 +116,7 @@ class MailerSMTP:
         self._password = password
         self._expediteur = expediteur
 
-    def envoyer(self, mail: Mail) -> None:
+    def _construire(self, mail: Mail) -> EmailMessage:
         msg = EmailMessage()
         msg["From"] = self._expediteur
         msg["To"] = mail.destinataire
@@ -127,12 +127,29 @@ class MailerSMTP:
         partie_html = msg.get_payload()[-1]
         for cid, octets in mail.images_inline.items():
             partie_html.add_related(octets, maintype="image", subtype="jpeg", cid=f"<{cid}>")
+        return msg
 
-        with smtplib.SMTP(self._host, self._port, timeout=30) as s:
-            s.starttls(context=ssl.create_default_context())
-            if self._user:
-                s.login(self._user, self._password or "")
-            s.send_message(msg)
+    def _auth(self, s) -> None:
+        if self._user:
+            s.login(self._user, self._password or "")
+
+    def envoyer(self, mail: Mail) -> None:
+        """Envoie via SSL implicite (port 465) ou STARTTLS (587, défaut) selon le port.
+
+        Beaucoup d'hébergeurs mutualisés (o2switch, OVH…) n'exposent que le 465 : la détection
+        évite un échec silencieux si `CONTRIB_SMTP_PORT=465`.
+        """
+        msg = self._construire(mail)
+        ctx = ssl.create_default_context()
+        if self._port == 465:
+            with smtplib.SMTP_SSL(self._host, self._port, timeout=30, context=ctx) as s:
+                self._auth(s)
+                s.send_message(msg)
+        else:
+            with smtplib.SMTP(self._host, self._port, timeout=30) as s:
+                s.starttls(context=ctx)
+                self._auth(s)
+                s.send_message(msg)
 
 
 def mailer_depuis_env(config: dict) -> Mailer | None:
